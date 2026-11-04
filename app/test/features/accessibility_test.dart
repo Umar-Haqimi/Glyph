@@ -1,6 +1,7 @@
 import 'dart:ui' show Tristate;
 
-import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction, SemanticsNode;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/app.dart';
@@ -20,7 +21,16 @@ import '../support/test_app.dart';
 /// reaches things in reading order; headings exist.
 const _phone = Size(360, 740);
 
+String? _lastDetails;
+
 Future<void> _phone360(WidgetTester tester, {double scale = 2.0, Brightness brightness = Brightness.light}) async {
+  // Keep the full diagnostics (which widget overflowed) for the failure message.
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    _lastDetails = details.toString();
+    previous?.call(details);
+  };
+  addTearDown(() => FlutterError.onError = previous);
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
   tester.platformDispatcher.textScaleFactorTestValue = scale;
@@ -44,7 +54,7 @@ Future<void> _push(WidgetTester tester, String route, [Object? args]) async {
 
 void _noProblems(WidgetTester tester, String where) {
   final e = tester.takeException();
-  if (e != null) fail('$where: ${e is FlutterError ? e.toStringDeep() : e}');
+  if (e != null) fail('$where: $e\n${_lastDetails ?? ''}');
 }
 
 /// Scrolls the first scrollable from top to bottom in steps, checking for
@@ -81,6 +91,7 @@ final _screens = <String, _Setup>{
     await _pumpApp(tester, env);
     await tester.tap(find.text(l10n.libraryImportFab));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(l10n.importPastePgn));
     await tester.tap(find.text(l10n.importPastePgn));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('pgnField')), vectorPgn('no_blank_lines.pgn'));
@@ -90,6 +101,7 @@ final _screens = <String, _Setup>{
     await _pumpApp(tester, env);
     await tester.tap(find.text(l10n.libraryImportFab));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(l10n.importPastePgn));
     await tester.tap(find.text(l10n.importPastePgn));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('pgnField')), vectorPgn('illegal_move_single.pgn'));
@@ -99,9 +111,11 @@ final _screens = <String, _Setup>{
     await _pumpApp(tester, env);
     await tester.tap(find.text(l10n.libraryImportFab));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(l10n.importFromLichess));
     await tester.tap(find.text(l10n.importFromLichess));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('onlineUsername')), 'someone');
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('onlineFetch')));
     await tester.pumpAndSettle();
   },
@@ -159,12 +173,21 @@ void main() {
       final id = await seedReview(env, userSide: Side.white);
       await _pumpApp(tester, env);
       await _push(tester, Routes.board, id);
+      await tester.tap(find.byKey(const Key('nav-next'))); // the start position has no Explain button
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('open-key-moments')));
       await tester.pumpAndSettle();
       _noProblems(tester, 'key moments');
       await _scrollThrough(tester, 'key moments');
-      await tester.tapAt(const Offset(10, 10)); // barrier
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop(); // close the sheet
       await tester.pumpAndSettle();
+      expect(find.byType(BoardScreen), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      final vertical = find.descendant(
+        of: find.byType(BoardScreen),
+        matching: find.byWidgetPredicate((w) => w is Scrollable && w.axis == Axis.vertical),
+      );
+      await tester.scrollUntilVisible(find.byKey(const Key('explain-button')), 150, scrollable: vertical.first);
       await tester.tap(find.byKey(const Key('explain-button')));
       await tester.pumpAndSettle();
       _noProblems(tester, 'explain sheet (not configured)');
@@ -178,6 +201,8 @@ void main() {
       await _push(tester, Routes.settings);
       for (final key in ['settings-engine-preset', 'settings-engine-threads', 'settings-engine-hash', 'settings-board-theme', 'settings-piece-set', 'settings-delete-all']) {
         await tester.scrollUntilVisible(find.byKey(Key(key)), 200, scrollable: find.byType(Scrollable).first);
+        await tester.ensureVisible(find.byKey(Key(key)));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(Key(key)));
         await tester.pumpAndSettle();
         _noProblems(tester, key);
@@ -226,9 +251,10 @@ void main() {
       await _screens['settings']!(tester, env);
       final headings = <String>[];
       for (final node in tester.semantics.simulatedAccessibilityTraversal()) {
-        if (node.getSemanticsData().flagsCollection.isHeader) headings.add(node.label);
+        if (node.getSemanticsData().flagsCollection.isHeader) headings.add(node.getSemanticsData().label);
       }
       expect(headings, [
+        l10n.settingsTitle, // the app bar title
         l10n.settingsEngine,
         l10n.settingsExplanations,
         l10n.settingsAccounts,
@@ -245,9 +271,10 @@ void main() {
       await _screens['about']!(tester, _env());
       final headings = [
         for (final node in tester.semantics.simulatedAccessibilityTraversal())
-          if (node.getSemanticsData().flagsCollection.isHeader) node.label,
+          if (node.getSemanticsData().flagsCollection.isHeader) node.getSemanticsData().label,
       ];
       expect(headings, [
+        l10n.aboutTitle, // the app bar title
         l10n.appTitle,
         l10n.aboutLicenseTitle,
         l10n.aboutSourceTitle,
@@ -266,7 +293,11 @@ void main() {
       await pumpReview(tester, env, id, initialPly: 6);
       tester.view.physicalSize = const Size(360, 3000);
       await tester.pumpAndSettle();
-      final order = [for (final n in tester.semantics.simulatedAccessibilityTraversal()) n.label];
+      String name(SemanticsNode n) {
+        final d = n.getSemanticsData();
+        return [d.label, d.tooltip, d.value].where((t) => t.isNotEmpty).join(' | ');
+      }
+      final order = [for (final n in tester.semantics.simulatedAccessibilityTraversal()) name(n)];
       int at(Pattern p) {
         final i = order.indexWhere((l) => p is String ? l.contains(p) : (p as RegExp).hasMatch(l));
         expect(i, isNonNegative, reason: 'no node labelled $p in $order');
@@ -289,6 +320,65 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('keyboard focus order on the Paste screen follows the screen: text field, paste, clear, then the games', (tester) async {
+      await _phone360(tester, scale: 1.0);
+      final env = _env();
+      await _screens['paste import (games found)']!(tester, env);
+      String where() {
+        final focus = FocusManager.instance.primaryFocus;
+        if (focus == null) return 'none';
+        final element = focus.context;
+        if (element == null) return 'none';
+        if (element.findAncestorWidgetOfExactType<EditableText>() != null || element.widget is EditableText) return 'field';
+        final text = <String>[];
+        void visit(Element e) {
+          if (e.widget is Text) text.add((e.widget as Text).data ?? '');
+          e.visitChildren(visit);
+        }
+        (element as Element).visitChildren(visit);
+        return text.isEmpty ? element.widget.runtimeType.toString() : text.first;
+      }
+
+      // Start from the text field, then Tab through the controls.
+      await tester.tap(find.byKey(const Key('pgnField')));
+      await tester.pump();
+      final order = <String>[where()];
+      for (var i = 0; i < 4; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        order.add(where());
+      }
+      // Field, Paste from clipboard, Clear, then the games to choose from; Save is
+      // disabled until one is chosen, so Tab skips it.
+      expect(order.take(3).toList(), ['field', l10n.importPasteFromClipboard, l10n.importClear], reason: '$order');
+      expect(order[3], contains(' – '), reason: 'the first game of the list: $order');
+      await tester.tap(find.byKey(const Key('pgnField')));
+      await tester.pump();
+    });
+
+    testWidgets('library: a game card is one node that reads players, result, date, moves, source, analysis, accuracy and side, and opens the game; the menu is its own node', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _phone360(tester, scale: 1.0);
+      final env = _env();
+      await env.seed(white: 'Alice', black: 'Bob', status: AnalysisStatus.completed, completedPlies: 41, whiteAccuracy: 91.2, blackAccuracy: 55.5, eco: 'C50', openingName: 'Italian Game', userSide: Side.white, source: GameSource.lichess);
+      await _pumpApp(tester, env);
+      final nodes = [for (final n in tester.semantics.simulatedAccessibilityTraversal()) n.getSemanticsData()];
+      final card = nodes.singleWhere((d) => d.label.startsWith('Alice (1500) – Bob'));
+      for (final part in ['1-0', '2026-10-23', '20 moves', 'lichess', 'Analysed', 'White 91%', 'Black 56%', 'You: White', 'C50', 'Italian Game']) {
+        expect(card.label, contains(part));
+      }
+      expect(card.flagsCollection.isButton, isTrue);
+      expect(card.hasAction(SemanticsAction.tap), isTrue);
+      // Nothing of the card's text is left as a separate stop.
+      expect(nodes.where((d) => d.label == '1-0' || d.label == 'Analysed'), isEmpty);
+      expect(nodes.where((d) => d.tooltip == l10n.boardMenuTooltip), hasLength(1));
+      // Activating it through the semantics tree opens the board.
+      await tester.tap(find.bySemanticsLabel(RegExp(r'^Alice \(1500\) – Bob')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardScreen), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets('every switch, button and slider in settings reports a label and a state', (tester) async {
       final handle = tester.ensureSemantics();
       await _phone360(tester, scale: 1.0);
@@ -298,7 +388,11 @@ void main() {
       for (final node in tester.semantics.simulatedAccessibilityTraversal()) {
         final data = node.getSemanticsData();
         if (data.flagsCollection.isEnabled != Tristate.none || data.flagsCollection.isButton || data.flagsCollection.isToggled != Tristate.none) {
-          expect(node.label.trim().isNotEmpty || node.value.trim().isNotEmpty, isTrue, reason: 'unlabelled control ${node.rect}');
+          expect(
+            data.label.trim().isNotEmpty || data.value.trim().isNotEmpty || data.tooltip.trim().isNotEmpty,
+            isTrue,
+            reason: 'unlabelled control ${node.rect} $data',
+          );
           checked++;
         }
       }

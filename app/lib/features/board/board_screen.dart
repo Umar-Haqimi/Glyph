@@ -8,6 +8,8 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
+import '../errors/recovery.dart';
 import '../../widgets/choice_option.dart';
 import '../../routes.dart';
 import '../export/export_pgn.dart';
@@ -250,13 +252,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     } else {
       content = dataAsync.hasError
           ? _Message(
-              text: l10n.boardLoadFailed,
+              text: appFailureText(l10n, AppFailure.boardLoad),
               actionKey: const Key('board-retry'),
               actionLabel: l10n.commonRetry,
-              onAction: () => ref.invalidate(boardDataProvider(id)),
+              onAction: () {
+                ref.invalidate(gameProvider(id));
+                ref.invalidate(boardDataProvider(id));
+              },
             )
           : _Message(
-              text: l10n.boardUnavailable,
+              text: appFailureText(l10n, AppFailure.boardMissing),
               actionKey: const Key('board-back'),
               actionLabel: l10n.commonBackToLibrary,
               onAction: () => Navigator.of(context).maybePop(),

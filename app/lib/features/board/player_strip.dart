@@ -62,34 +62,36 @@ class PlayerStrip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  displayName,
-                  key: Key('strip-name-${side.name}'),
-                  style: theme.textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              // A Wrap, not a Row: with large text the name, rating and "You"
+              // marker go on a second line instead of overflowing.
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      displayName,
+                      key: Key('strip-name-${side.name}'),
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (elo != null) Text(l10n.playerRating(elo!), style: theme.textTheme.bodySmall),
+                    if (isUser)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          l10n.playerYou,
+                          style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSecondaryContainer),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (elo != null) ...[
-                const SizedBox(width: 6),
-                Text(l10n.playerRating(elo!), style: theme.textTheme.bodySmall),
-              ],
-              if (isUser) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    l10n.playerYou,
-                    style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSecondaryContainer),
-                  ),
-                ),
-              ],
-              const Spacer(),
               if (clock != null)
                 Container(
                   key: Key('strip-clock-${side.name}'),

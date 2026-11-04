@@ -7,52 +7,6 @@ import 'package:test/test.dart';
 
 import 'fake_site.dart';
 
-/// A fake chess.com: archives for [user] and the games of each month.
-class FakeChessCom {
-  FakeChessCom(this.site, this.user, this.months);
-
-  final FakeSite site;
-  final String user;
-
-  /// (year, month) -> games, ascending by key insertion order.
-  final Map<(int, int), List<Map<String, Object?>>> months;
-  final etags = <String, String>{};
-  final served = <String, int>{}; // path -> full (200) responses
-  final notModified = <String>[];
-  var archivesEtag = 'W/"archives-1"';
-
-  void install() {
-    site.handler = (req, seen) async {
-      final path = seen.path;
-      final inm = seen.headers['if-none-match'];
-      if (path == '/pub/player/$user/games/archives') {
-        if (inm == archivesEtag) {
-          notModified.add(path);
-          return sendStatus(req.response, 304, headers: {'etag': archivesEtag});
-        }
-        served[path] = (served[path] ?? 0) + 1;
-        return sendJson(req.response, {
-          'archives': [for (final k in months.keys) archiveUrl(user, k.$1, k.$2)],
-        }, headers: {'etag': archivesEtag});
-      }
-      final m = RegExp(r'^/pub/player/' '$user' r'/games/(\d{4})/(\d{2})$').firstMatch(path);
-      if (m != null) {
-        final key = (int.parse(m.group(1)!), int.parse(m.group(2)!));
-        final games = months[key];
-        if (games == null) return sendStatus(req.response, 404);
-        final etag = etags.putIfAbsent(path, () => 'W/"${path.hashCode}"');
-        if (inm == etag) {
-          notModified.add(path);
-          return sendStatus(req.response, 304, headers: {'etag': etag});
-        }
-        served[path] = (served[path] ?? 0) + 1;
-        return sendJson(req.response, {'games': games}, headers: {'etag': etag});
-      }
-      return sendStatus(req.response, 404, headers: {});
-    };
-  }
-}
-
 void main() {
   late FakeSite site;
   setUp(() async => site = await FakeSite.start());

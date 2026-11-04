@@ -85,6 +85,7 @@ class TestEnv {
     OpeningBook? book,
     EngineDriverFactory? driverFactory,
     InMemoryAnalysisRepository Function(InMemoryStore store)? analysesBuilder,
+    InMemoryGameRepository Function(InMemoryStore store)? gamesBuilder,
     Map<String, String>? secrets,
     InMemorySecretStore? secretStore,
     LlmClient? llm,
@@ -109,7 +110,7 @@ class TestEnv {
         chessCom = chessCom ?? OfflineOnlineClient(),
         intake = intake ?? FakeShareIntake(),
         pgnShare = pgnShare ?? FakePgnShare() {
-    games = InMemoryGameRepository(store);
+    games = gamesBuilder?.call(store) ?? InMemoryGameRepository(store);
     cache = InMemoryLlmCacheRepository(store);
     analyses = analysesBuilder?.call(store) ?? InMemoryAnalysisRepository(store);
   }
@@ -136,11 +137,17 @@ class TestEnv {
   final FakeShareIntake intake;
   final FakePgnShare pgnShare;
 
+  /// The chess.com ETag cache of the app under test.
+  final onlineCache = InMemoryOnlineCache();
+
   /// Creates the engine of the app under test (default: a fake that answers
   /// every search with a trivial line).
   final EngineDriverFactory driverFactory;
   final PipelineTimeouts timeouts;
   int clock = 1000000;
+
+  /// How many times the opening book was asked for (startup test).
+  int bookReads = 0;
 
   List<Override> get overrides => [
         gameRepositoryProvider.overrideWithValue(games),
@@ -154,7 +161,11 @@ class TestEnv {
         chessComClientProvider.overrideWithValue(chessCom),
         shareIntakeServiceProvider.overrideWithValue(intake),
         pgnShareServiceProvider.overrideWithValue(pgnShare),
-        openingBookProvider.overrideWith((ref) => book),
+        onlineCacheProvider.overrideWithValue(onlineCache),
+        openingBookProvider.overrideWith((ref) {
+          bookReads++;
+          return book;
+        }),
         nowMsProvider.overrideWithValue(() => clock++),
         engineDriverFactoryProvider.overrideWithValue(driverFactory),
         pipelineTimeoutsProvider.overrideWithValue(timeouts),

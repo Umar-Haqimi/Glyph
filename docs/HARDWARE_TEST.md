@@ -1,6 +1,10 @@
 # HARDWARE_TEST — manual device checklist (SPEC 7.3)
 
-Skeleton created in M0; completed in M8. Fill the `Result` fields per run; keep one dated copy of the table per release candidate.
+Created in M0, completed in M8. Fill the `Result` fields per run; keep one dated copy of the table per release candidate (copy this file to `docs/hardware/<version>-<date>.md` and fill the copy).
+
+**Nothing in this file has been run on a device yet.** The cloud container that built M0 to M8 has no phone or emulator; every `Result` cell is empty on purpose. Host-side measurements (Stockfish 16, for ranking settings only) are in `docs/perf/engine_bench_host.md`.
+
+The manual checklist of SPEC 7.3 is sections A to F; sections G and H are the M7 and M8 additions; section I says how to run the automated device test; section J is the performance record sheet.
 
 ## Run header
 
@@ -32,7 +36,12 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | A2 | Fast preset, same game | <= 1 min | | time: | |
 | A3 | Device temperature before / after Normal run | record | | before: / after: | |
 | A4 | Battery drop over the Normal run | record | | start %: / end %: | |
-| A5 | Threads / Hash used (from settings or logs) | record | | threads: / hash MB: | |
+| A5 | Threads / Hash used (Settings > Engine; the defaults are `min(4, cores - 2)` threads and 64 MB) | record | | threads: / hash MB: | |
+| A6 | Same Normal run with Settings > Engine > Threads = 1, 2, and the default | record; the default should be the fastest or within 10% of it | | 1: / 2: / default: | Validates the choice in DECISIONS M8. If a lower count is as fast, the phone throttles: lower the default. |
+| A7 | Hash 16 MB vs 64 MB vs 256 MB on the Normal run | record; no run should be slower than the 64 MB one by more than noise | | 16: / 64: / 256: | Host data: hash size does not matter at depth 16 (`docs/perf/engine_bench_host.md`). |
+| A8 | Deep preset (depth 20) of the same game | record | | time: | Not a target; tells users what to expect. |
+| A9 | Cold start to the library with 100 saved games (force-stop, launch, stop the clock when the list shows) | <= 2 s | | time: | Startup does no engine start and no opening-book decode (`app/test/startup_test.dart`). |
+| A10 | Scroll the library with 100 saved games | no visible jank | | | The list query reads no PGN text and uses the `games_imported` index. |
 
 ### B. Lifecycle and resume
 
@@ -94,7 +103,7 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | F5 | Install on latest-API emulator (E2) and launch | Engine starts, analysis completes | | |
 | F6 | Clear-text request to LAN host works on API 28+ (E2) | Works | | |
 
-### G. Online import, share intake and export (M7; nothing here could be built or run in the cloud container: no Android SDK)
+### G. Online import, share intake and export (M7; the release build compiles in the cloud container, but nothing here has run on a device)
 
 | # | Step | Expected | Result | Notes |
 |---|---|---|---|---|
@@ -117,6 +126,60 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | G17 | Stalled provider: `.pgn` from a provider that never answers (e.g. a cloud-backed Files entry with airplane mode on, or a test provider that sleeps) | After about 0.5 s "Reading the shared file..." appears; after 15 s a dialog says reading took too long; a normal share made right afterwards works at once | | |
 | G18 | Deep-link data ignored: `adb shell am start -a android.intent.action.VIEW -d "content://x/y.pgn" -n my.umarh.glyph/.MainActivity`, `... -d "file:///sdcard/a.pgn" -a android.intent.action.VIEW my.umarh.glyph`, and `-d "/board" -n my.umarh.glyph/.MainActivity` | Nothing imports and no screen opens or stacks (explicit intents without the in-process token are ignored; `file:` is never offered Glyph in Open with); also a content URI of Glyph's own provider (`content://my.umarh.glyph.fileprovider/...`) via `ShareIntakeActivity` is dropped | | |
 | G19 | Export PGN: the share sheet | Glyph itself is not listed as a target; a 300 KB PGN still shares as a file (no text body) | | |
+
+### H. Hardening (M8)
+
+| # | Step | Expected | Result | Notes |
+|---|---|---|---|---|
+| H1 | Install the signed release APK for the device ABI (`tool/build_release.sh`, then `adb install`) | Installs, launcher icon is the green "!!" adaptive icon (and themed on Android 13+), name "Glyph" | | The first run of the R8-minified build on a phone: also look at H2 to H6 for missing-class crashes. |
+| H2 | Release build: Settings > Explanations > LLM connection: save a key, restart the app, Test connection, Remove key | Works (flutter_secure_storage with R8) | | `adb logcat` has no `NoSuchMethod` / `ClassNotFound`. |
+| H3 | Release build: Import > Open file (system picker), pick a `.pgn` | Preview opens (file_picker with R8) | | |
+| H4 | Release build: share a game from another app (H2 of section G) and export a PGN | Intake and share sheet work | | |
+| H5 | Release build: analyse a game | Engine starts, badges fill in | | |
+| H6 | Release build: pull `adb logcat -d` after H2 to H5 | No key, PGN, username or prompt text anywhere; lines from `glyph` only for real warnings | | |
+| H7 | Settings > Engine: change depth preset, threads, hash; analyse a new game | The analysis uses them (Fast finishes sooner; `adb shell top -H` shows the thread count) | | A change applies to the next analysis, not to a running one. |
+| H8 | Settings > Appearance: theme system / light / dark; dynamic colour off and on | Applies at once, survives a restart, no white flash at start in dark mode | | |
+| H9 | Settings > Appearance: each board colour (24) and piece set (4) | The preview and the board change; every piece image shows (no empty squares) | | A missing piece image would mean an allow-list asset is absent from the APK. |
+| H10 | Settings > Appearance: Move sounds on, step through a game with the arrows | One click per single step, none when jumping to the first / last move; silent when Android "touch sounds" is off | | |
+| H11 | Settings > Data: Clear saved explanations, Clear online cache | Messages shown, explanations gone, games kept | | |
+| H12 | Settings > Data: Delete all data (cancel first, then confirm) | Library empty, keys gone (Explain asks for setup), settings back to defaults, no crash; an analysis that was running stops | | |
+| H13 | Settings > About | Version 0.1.0, GPL notice, source link copies, credits, every asset listed, privacy text; "Open-source licences" shows Glyph, the assets ("Glyph asset: ...") and the packages | | |
+| H14 | TalkBack on: Library, Import sheet, Paste, From lichess (results), Settings and every dialog, LLM connection, Board, Key moments, Explain sheet, Report, About | Every control has a name and a state; headings are announced and can be jumped between; reading order matches the screen; dialogs read their title first | | `app/test/features/accessibility_test.dart` checks structure; this checks how it sounds. |
+| H15 | Font size at the largest setting plus Display size at the largest (Settings > Display) on a small phone | No clipped or overlapping text on any screen above; everything reachable by scrolling | | The widget tests cover 360x740 at 2.0x. |
+| H16 | Dark theme and light theme on every screen; one pass with "Remove animations" on | Text readable; badges legible on both board colours; no motion with animations off | | |
+| H17 | Corrupt the database on a test device (`adb shell run-as my.umarh.glyph sh -c 'echo junk > files/glyph.db'`), start the app | "Glyph can't open its data" with Try again and Delete the database; deleting starts fresh | | |
+| H18 | `adb shell run-as my.umarh.glyph ls -R .` after a normal session | No file outside `databases`/`files`/`cache`/`shared_prefs`; no PGN or key in plain text (`grep -r sk- .` finds nothing) | | |
+
+### I. The device integration test
+
+`app/integration_test/engine_device_test.dart` runs the real `multistockfish` engine (Stockfish 19 light net) through `EngineService` and SQLite: a 30-ply game at Fast, every position labelled, eval sign sanity on a known winning position, cancel and resume. It uses tolerant assertions only (SPEC trap 8) and is tagged `device`; plain `flutter test` does not run it.
+
+```
+cd app
+flutter devices                       # pick an emulator or a phone (USB debugging on)
+flutter test integration_test/engine_device_test.dart -d <device id>
+# without the pub step: add --no-pub
+```
+
+`flutter analyze` compiles it on every CI run, so it cannot rot unnoticed. Expected: all tests pass in under two minutes on a phone; on the x86_64 emulator expect about 1.3 s for a depth-12 position with 4 threads. A failure with `StateError: A light engine is already live` means another Glyph engine is running on the device (force-stop the app and retry).
+
+| # | Step | Expected | Result | Notes |
+|---|---|---|---|---|
+| I1 | Run the test above on D1 | All tests pass | | |
+| I2 | Run it on E1 (API 26 emulator) | All tests pass | | |
+| I3 | Run it on E2 (latest API emulator) | All tests pass | | |
+
+### J. Performance record sheet (SPEC 7.3 targets)
+
+| Measure | Target | D1 result | Host reference (Stockfish 16, 4 cores) |
+|---|---|---|---|
+| ~80-ply game, Normal (depth 16), MultiPV 2 | <= 3 min | | 27 to 45 s for 74 plies depending on threads |
+| Same game, Fast (depth 12) | <= 1 min | | 6.6 to 8.7 s |
+| Cold start to the library | <= 2 s | | |
+| Battery drop over the Normal run | record | | |
+| Temperature rise over the Normal run | record | | |
+
+If a target is missed, the knobs are in Settings > Engine (threads, hash) and the defaults in `app/lib/features/settings/engine_settings.dart` (`EngineDefaults`); see `docs/DECISIONS.md`, "M8 decisions", for why the defaults are what they are.
 
 ## Sign-off
 

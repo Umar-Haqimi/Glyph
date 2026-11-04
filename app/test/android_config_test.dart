@@ -158,4 +158,60 @@ void main() {
     expect(config, contains('cleartextTrafficPermitted="true"'));
     expect(config, isNot(contains('<domain')));
   });
+
+  group('release hardening (SPEC 6, M8)', () {
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    final rules = File('android/app/proguard-rules.pro').readAsStringSync();
+
+    test('R8 minification and resource shrinking are on for the release build type, with the Glyph rules', () {
+      final release = RegExp(r'release \{.*?\n        \}', dotAll: true).firstMatch(gradle)!.group(0)!;
+      expect(release, contains('isMinifyEnabled = true'));
+      expect(release, contains('isShrinkResources = true'));
+      expect(release, contains('proguard-android-optimize.txt'));
+      expect(release, contains('"proguard-rules.pro"'));
+      expect(release, isNot(contains('isDebuggable = true')));
+    });
+
+    test('signing comes from key.properties or the four GLYPH_ environment variables; nothing is committed', () {
+      for (final name in ['GLYPH_KEYSTORE_FILE', 'GLYPH_KEYSTORE_PASSWORD', 'GLYPH_KEY_ALIAS', 'GLYPH_KEY_PASSWORD']) {
+        expect(gradle, contains('"$name"'), reason: name);
+      }
+      expect(gradle, contains('System.getenv(envName)'));
+      expect(gradle, contains('rootProject.file("key.properties")'));
+      // No literal password or store path in the build file.
+      expect(gradle, isNot(matches(RegExp(r'storePassword\s*=\s*"'))));
+      expect(gradle, isNot(matches(RegExp(r'keyPassword\s*=\s*"'))));
+      final ignore = File('../.gitignore').readAsStringSync();
+      for (final pattern in ['key.properties', '*.jks', '*.keystore']) {
+        expect(ignore, contains(pattern), reason: '.gitignore must cover $pattern');
+      }
+      final tracked = Process.runSync('git', ['ls-files'], workingDirectory: '..').stdout as String;
+      expect(RegExp(r'(^|/)key\.properties$|\.jks$|\.keystore$', multiLine: true).hasMatch(tracked), isFalse, reason: 'a keystore or key.properties is tracked');
+    });
+
+    test('GLYPH_REQUIRE_SIGNING=1 makes a release build without a keystore fail, and the release script sets it', () {
+      expect(gradle, contains('GLYPH_REQUIRE_SIGNING'));
+      expect(gradle, contains('throw GradleException'));
+      final script = File('../tool/build_release.sh').readAsStringSync();
+      expect(script, contains('GLYPH_REQUIRE_SIGNING=1'));
+      expect(script, contains('--split-debug-info=build/symbols'));
+      expect(script, contains('flutter build apk --release --split-per-abi'));
+      expect(script, contains('check_permissions.sh'));
+    });
+
+    test('the rules file documents the plugin audit, keeps stack traces mappable and silences only the Play Core warning', () {
+      expect(rules, contains('flutter_secure_storage'));
+      expect(rules, contains('file_picker'));
+      expect(rules, contains('multistockfish'));
+      expect(rules, contains('sqlite3'));
+      expect(rules, contains('-keepattributes SourceFile,LineNumberTable'));
+      final active = rules.split('\n').where((l) => l.trim().isNotEmpty && !l.trimLeft().startsWith('#')).toList();
+      expect(active.where((l) => l.startsWith('-dontwarn')).toList(), ['-dontwarn com.google.android.play.core.**']);
+      expect(active.where((l) => l.startsWith('-dontobfuscate') || l.startsWith('-dontshrink') || l.startsWith('-dontoptimize')), isEmpty);
+    });
+
+    test('Dart debug symbols never end up in the APK: the symbols directory is a build output', () {
+      expect(File('../.gitignore').readAsStringSync(), contains('build/'));
+    });
+  });
 }

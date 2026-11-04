@@ -6,6 +6,8 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../data/repositories.dart';
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
+import '../errors/recovery.dart';
 import '../library/library_controller.dart';
 
 /// Saves a parsed [Game] to the library: names the opening from the book and
@@ -56,7 +58,7 @@ void showImportSaveFailed(BuildContext context, VoidCallback retry) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
-      content: Text(l10n.importSaveFailed),
+      content: Text(appFailureText(l10n, AppFailure.importSave)),
       action: SnackBarAction(label: l10n.commonRetry, onPressed: retry),
     ));
 }

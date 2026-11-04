@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dartchess/dartchess.dart' show Side;
 
+import '../util/limits.dart';
+
 /// Where an online game comes from.
 enum OnlineSource { lichess, chesscom }
 
@@ -249,8 +251,8 @@ class OnlineCancelToken {
 /// (a wait after a 429 is not part of it).
 class OnlineTimeouts {
   const OnlineTimeouts({
-    this.firstByte = const Duration(seconds: 60),
-    this.total = const Duration(seconds: 180),
+    this.firstByte = Limits.firstByteTimeout,
+    this.total = Limits.totalTimeout,
   });
 
   final Duration firstByte;

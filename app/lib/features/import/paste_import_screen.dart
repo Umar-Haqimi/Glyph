@@ -119,7 +119,8 @@ class _PasteImportScreenState extends ConsumerState<PasteImportScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
                     children: [
                       TextButton.icon(
                         onPressed: _paste,

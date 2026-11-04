@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/models.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
 import '../errors/recovery.dart';
 
 /// Progress of the analysis of one game with Cancel / Resume / Retry
@@ -62,11 +63,7 @@ class AnalysisProgress extends ConsumerWidget {
       case AnalysisPaused(:final completed, total: final n):
         return row(l10n.analysisPaused(completed, n), actionLabel: l10n.analysisResume, onAction: start);
       case AnalysisFailed(:final kind):
-        final text = switch (kind) {
-          AnalysisFailureKind.engineUnavailable => l10n.analysisFailedUnavailable,
-          AnalysisFailureKind.engineCrashed => l10n.analysisFailedCrashed,
-          AnalysisFailureKind.invalidGame => l10n.analysisFailedInvalid,
-        };
+        final text = analysisFailureText(l10n, kind);
         // Retrying cannot help when the game itself is unreadable.
         return analysisRecovery(kind) == Recovery.retry
             ? row(text, actionLabel: l10n.analysisRetry, onAction: start)

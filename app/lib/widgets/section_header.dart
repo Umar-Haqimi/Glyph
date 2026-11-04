@@ -11,6 +11,9 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
         header: true,
+        // Its own node: without it the heading merges with the text next to it
+        // and a screen reader reads both as one "heading".
+        container: true,
         child: Padding(
           padding: padding,
           child: Text(title, style: Theme.of(context).textTheme.titleSmall),

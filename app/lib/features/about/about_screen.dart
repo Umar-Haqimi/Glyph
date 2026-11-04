@@ -44,7 +44,7 @@ class AboutScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Semantics(header: true, child: Text(l10n.appTitle, style: theme.textTheme.headlineMedium)),
+            Semantics(header: true, container: true, child: Text(l10n.appTitle, style: theme.textTheme.headlineMedium)),
             const SizedBox(height: 4),
             Text(l10n.aboutVersion(appVersion), key: const Key('about-version'), style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
@@ -61,15 +61,15 @@ class AboutScreen extends StatelessWidget {
               ),
             ),
             SectionHeader(l10n.aboutSourceTitle, padding: const EdgeInsets.only(top: 24, bottom: 8)),
-            SelectableText(projectUrl, key: const Key('about-source-url')),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('about-source-copy'),
-                onPressed: () => _copyLink(context),
-                icon: const Icon(Icons.copy_outlined),
-                label: Text(l10n.aboutSourceCopy),
-              ),
+            // One 48 dp tile: the address, and a tap copies it (Glyph has no
+            // browser dependency, so there is no "open" action).
+            ListTile(
+              key: const Key('about-source-copy'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(projectUrl, key: const Key('about-source-url')),
+              subtitle: Text(l10n.aboutSourceCopy),
+              trailing: const Icon(Icons.copy_outlined),
+              onTap: () => _copyLink(context),
             ),
             SectionHeader(l10n.aboutCreditsTitle, padding: const EdgeInsets.only(top: 24, bottom: 8)),
             Text(l10n.aboutCreditStockfish, key: const Key('about-credit-stockfish')),

@@ -8,8 +8,11 @@ plugins {
 }
 
 // Release signing: read from android/key.properties (git-ignored) or from environment variables
-// (GLYPH_KEYSTORE_FILE, GLYPH_KEYSTORE_PASSWORD, GLYPH_KEY_ALIAS, GLYPH_KEY_PASSWORD).
-// If neither is present the release build falls back to the debug key so the build always passes.
+// (GLYPH_KEYSTORE_FILE, GLYPH_KEYSTORE_PASSWORD, GLYPH_KEY_ALIAS, GLYPH_KEY_PASSWORD). Nothing about the
+// keystore is committed (.gitignore covers key.properties, *.jks and *.keystore).
+// If neither is present the release build falls back to the debug key so CI and local builds always pass;
+// such an APK is for testing only. Set GLYPH_REQUIRE_SIGNING=1 (tool/build_release.sh does) to make a
+// release build without a keystore fail instead.
 val keyProperties = Properties().apply {
     val file = rootProject.file("key.properties")
     if (file.exists()) FileInputStream(file).use { load(it) }
@@ -22,6 +25,7 @@ val releaseStoreFile = signingValue("storeFile", "GLYPH_KEYSTORE_FILE")
 val releaseStorePassword = signingValue("storePassword", "GLYPH_KEYSTORE_PASSWORD")
 val releaseKeyAlias = signingValue("keyAlias", "GLYPH_KEY_ALIAS")
 val releaseKeyPassword = signingValue("keyPassword", "GLYPH_KEY_PASSWORD")
+val requireReleaseSigning = System.getenv("GLYPH_REQUIRE_SIGNING") == "1"
 val hasReleaseSigning = releaseStoreFile != null &&
     releaseStorePassword != null &&
     releaseKeyAlias != null &&
@@ -72,6 +76,17 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+}
+
+// GLYPH_REQUIRE_SIGNING=1: refuse to build a release without a release keystore (debug builds are unaffected).
+gradle.taskGraph.whenReady {
+    val releasing = allTasks.any { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("package") || it.name.startsWith("bundle")) }
+    if (requireReleaseSigning && releasing && !hasReleaseSigning) {
+        throw GradleException(
+            "GLYPH_REQUIRE_SIGNING=1 but no release keystore is configured: " +
+                "set android/key.properties or GLYPH_KEYSTORE_FILE / GLYPH_KEYSTORE_PASSWORD / GLYPH_KEY_ALIAS / GLYPH_KEY_PASSWORD",
+        )
     }
 }
 

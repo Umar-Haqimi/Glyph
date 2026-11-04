@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/models.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
+import '../errors/recovery.dart';
 import '../../routes.dart';
 import '../export/export_pgn.dart';
 import '../import/import_sheet.dart';
@@ -40,7 +42,7 @@ class LibraryScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Semantics(liveRegion: true, child: Text(l10n.libraryLoadFailed, textAlign: TextAlign.center)),
+                Semantics(liveRegion: true, child: Text(appFailureText(l10n, AppFailure.libraryLoad), textAlign: TextAlign.center)),
                 const SizedBox(height: 16),
                 FilledButton(
                   key: const Key('library-retry'),
@@ -192,84 +194,83 @@ class GameCard extends ConsumerWidget {
       if (game.eco != null) game.eco!,
       if (game.openingName != null) game.openingName!,
     ].join(' · ');
+    final title = l10n.libraryGameTitle(
+      _player(l10n, game.white, game.whiteElo),
+      _player(l10n, game.black, game.blackElo),
+    );
+    void open() => Navigator.of(context).pushNamed(Routes.board, arguments: game.id);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(context).pushNamed(Routes.board, arguments: game.id),
-        child: Padding(
-          // The menu button is a 48 dp target; the right padding is 4 so that
-          // its icon lines up with the card's 16 dp inset (the rows below
-          // add the missing 12).
-          padding: const EdgeInsets.fromLTRB(16, 0, 4, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        l10n.libraryGameTitle(
-                          _player(l10n, game.white, game.whiteElo),
-                          _player(l10n, game.black, game.blackElo),
-                        ),
-                        style: theme.textTheme.titleMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+      child: Stack(
+        children: [
+          // One node for a screen reader: players, result, date, moves, source,
+          // analysis state, accuracy and side read as one sentence and the card
+          // opens the game; the menu button stays a node of its own.
+          Semantics(
+            container: true,
+            button: true,
+            label: l10n.libraryCardSemantics(title, [if (opening.isNotEmpty) opening, ...chips].join(', ')),
+            onTap: open,
+            child: ExcludeSemantics(
+              child: InkWell(
+                onTap: open,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Room for the 48 dp menu button at the top right.
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 36),
+                        child: Text(title, style: theme.textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
-                    ),
-                  ),
-                  PopupMenuButton<_CardAction>(
-                    key: Key('game-menu-${game.id}'),
-                    tooltip: l10n.boardMenuTooltip,
-                    onSelected: (action) {
-                      switch (action) {
-                        case _CardAction.export:
-                          exportGamePgn(context, ref, game.id);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        key: Key('game-export-${game.id}'),
-                        value: _CardAction.export,
-                        child: Text(l10n.exportPgn),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsetsDirectional.only(end: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (opening.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(opening, style: theme.textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        for (final c in chips)
-                          Chip(
-                            label: Text(c),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            labelStyle: theme.textTheme.labelMedium,
-                          ),
+                      if (opening.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(opening, style: theme.textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          for (final c in chips)
+                            Chip(
+                              label: Text(c),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              labelStyle: theme.textTheme.labelMedium,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          PositionedDirectional(
+            top: 0,
+            end: 0,
+            child: PopupMenuButton<_CardAction>(
+              key: Key('game-menu-${game.id}'),
+              tooltip: l10n.boardMenuTooltip,
+              onSelected: (action) {
+                switch (action) {
+                  case _CardAction.export:
+                    exportGamePgn(context, ref, game.id);
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  key: Key('game-export-${game.id}'),
+                  value: _CardAction.export,
+                  child: Text(l10n.exportPgn),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

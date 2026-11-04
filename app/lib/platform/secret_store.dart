@@ -66,6 +66,9 @@ class InMemorySecretStore implements SecretStore {
 
   int reads = 0;
 
+  /// Makes [delete] throw, like a keystore that refuses (tests).
+  bool failDeletes = false;
+
   @override
   Future<String?> read(String slot) async {
     reads++;
@@ -76,5 +79,8 @@ class InMemorySecretStore implements SecretStore {
   Future<void> write(String slot, String value) async => _values[slot] = value;
 
   @override
-  Future<void> delete(String slot) async => _values.remove(slot);
+  Future<void> delete(String slot) async {
+    if (failDeletes) throw StateError('keystore unavailable');
+    _values.remove(slot);
+  }
 }

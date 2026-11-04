@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
+import '../errors/recovery.dart';
 import '../../platform/app_log.dart';
 import '../../platform/pgn_share_service.dart';
 import 'pgn_export_service.dart';
@@ -14,7 +16,7 @@ Future<void> exportGamePgn(BuildContext context, WidgetRef ref, int gameId) asyn
   void fail() => messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
-      content: Text(l10n.exportFailed),
+      content: Text(appFailureText(l10n, AppFailure.exportShare)),
       // Recovery: the same export again (the share sheet or the cache folder
       // may only have been busy).
       action: SnackBarAction(label: l10n.exportRetry, onPressed: () {

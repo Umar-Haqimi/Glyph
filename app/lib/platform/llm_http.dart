@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:glyph_core/glyph_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -9,4 +10,8 @@ import 'package:http/io_client.dart';
 /// the other two timeouts live in `LlmClient`). The only network access the
 /// app makes besides the online game import (M7); no user agent, no cookies,
 /// no proxy settings beyond the system's.
-http.Client createLlmHttpClient() => IOClient(HttpClient()..connectionTimeout = Limits.connectTimeout);
+http.Client createLlmHttpClient() => IOClient(buildLlmHttpClient());
+
+/// The `dart:io` client under [createLlmHttpClient] (a test reads its timeout).
+@visibleForTesting
+HttpClient buildLlmHttpClient() => HttpClient()..connectionTimeout = Limits.connectTimeout;

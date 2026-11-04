@@ -478,6 +478,21 @@ void main() {
       expect(await cache.get('e4'), isNotNull);
     });
 
+    test('clear forgets every entry (Settings > Clear online cache)', () async {
+      final db = Db.inMemory();
+      addTearDown(db.close);
+      final cache = SqliteOnlineCache(db);
+      await cache.put('a', const CachedResponse('t', 'b'));
+      await cache.put('b', const CachedResponse('t', 'b'));
+      await cache.clear();
+      expect(await cache.get('a'), isNull);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM http_cache').first['n'], 0);
+      final memory = InMemoryOnlineCache();
+      await memory.put('a', const CachedResponse('t', 'b'));
+      await memory.clear();
+      expect(await memory.get('a'), isNull);
+    });
+
     test('a version 3 database upgrades to the latest and keeps its games', () async {
       final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v3.db';
       addTearDown(() => File(path).parent.deleteSync(recursive: true));

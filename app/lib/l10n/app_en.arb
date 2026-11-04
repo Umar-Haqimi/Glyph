@@ -731,5 +731,7 @@
   "pieceSet_cburnett": "Cburnett",
   "pieceSet_merida": "Merida",
   "pieceSet_mpchess": "MP Chess",
-  "pieceSet_rhosgfx": "RHOS"
+  "pieceSet_rhosgfx": "RHOS",
+  "libraryCardSemantics": "{title}. {details}",
+  "@libraryCardSemantics": {"placeholders": {"title": {"type": "String"}, "details": {"type": "String"}}}
 }

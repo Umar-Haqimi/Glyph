@@ -11,6 +11,8 @@ import 'data/providers.dart';
 import 'data/sqlite_repositories.dart';
 import 'engine/engine_providers.dart';
 import 'features/about/asset_licences.dart';
+import 'features/errors/failure_text.dart';
+import 'features/errors/recovery.dart';
 import 'features/settings/appearance_settings.dart';
 import 'features/settings/explain_settings.dart';
 import 'l10n/app_localizations.dart';
@@ -225,9 +227,9 @@ class _StartupErrorScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Semantics(header: true, child: Text(l10n.startupDbTitle, style: theme.textTheme.headlineSmall)),
+                Semantics(header: true, container: true, child: Text(l10n.startupDbTitle, style: theme.textTheme.headlineSmall)),
                 const SizedBox(height: 12),
-                Semantics(liveRegion: true, child: Text(l10n.startupDbBody)),
+                Semantics(liveRegion: true, child: Text(appFailureText(l10n, AppFailure.databaseOpen))),
                 if (resetFailed) ...[
                   const SizedBox(height: 12),
                   Text(

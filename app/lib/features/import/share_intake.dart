@@ -9,6 +9,7 @@ import '../../data/models.dart';
 import '../../l10n/app_localizations.dart';
 import '../../platform/app_log.dart';
 import '../../platform/share_intake.dart';
+import '../errors/failure_text.dart';
 import 'import_preview_screen.dart';
 import 'pgn_issue_text.dart';
 
@@ -166,13 +167,7 @@ class _ShareIntakeHostState extends ConsumerState<ShareIntakeHost> {
           builder: (_) => ImportPreviewScreen(result: result, source: GameSource.share),
         )));
       case ShareRefused(:final problem):
-        unawaited(_notice(context, switch (problem) {
-          ShareProblem.tooLarge => l10n.importErrorTooLarge,
-          ShareProblem.unreadable => l10n.shareReadFailed,
-          ShareProblem.link => l10n.shareLinkNotSupported,
-          ShareProblem.noGame => l10n.shareNoGame,
-          ShareProblem.timeout => l10n.shareReadTimeout,
-        }));
+        unawaited(_notice(context, shareProblemText(l10n, problem)));
       case ShareInvalid(:final issue):
         unawaited(_notice(context, pgnIssueText(l10n, issue)));
     }

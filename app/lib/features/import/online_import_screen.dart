@@ -52,6 +52,25 @@ class _OnlineImportScreenState extends ConsumerState<OnlineImportScreen> {
     super.dispose();
   }
 
+  /// The username field with the Fetch / Cancel button: side by side, or one
+  /// under the other when the text is large (a row would overflow).
+  Widget _fieldAndButton({required bool large, required Widget field, required Widget button}) {
+    if (large) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [field, const SizedBox(height: 8), Align(alignment: AlignmentDirectional.centerEnd, child: button)],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: 12),
+        Padding(padding: const EdgeInsets.only(top: 4), child: button),
+      ],
+    );
+  }
+
   void _fetch() {
     if (!_valid) return;
     FocusScope.of(context).unfocus();
@@ -159,47 +178,39 @@ class _OnlineImportScreenState extends ConsumerState<OnlineImportScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('onlineUsername'),
-                  controller: _controller,
-                  enabled: !state.loading,
-                  onChanged: (_) => setState(() => _edited = true),
-                  onSubmitted: (_) => _fetch(),
-                  textInputAction: TextInputAction.search,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    labelText: _source == OnlineSource.lichess ? l10n.onlineUsernameLabelLichess : l10n.onlineUsernameLabelChessCom,
-                    errorText: invalid
-                        ? (_source == OnlineSource.lichess ? l10n.onlineUsernameInvalidLichess : l10n.onlineUsernameInvalidChessCom)
-                        : null,
-                    errorMaxLines: 3,
-                    border: const OutlineInputBorder(),
+          child: _fieldAndButton(
+            large: MediaQuery.textScalerOf(context).scale(14) / 14 >= 1.3,
+            field: TextField(
+              key: const Key('onlineUsername'),
+              controller: _controller,
+              enabled: !state.loading,
+              onChanged: (_) => setState(() => _edited = true),
+              onSubmitted: (_) => _fetch(),
+              textInputAction: TextInputAction.search,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: _source == OnlineSource.lichess ? l10n.onlineUsernameLabelLichess : l10n.onlineUsernameLabelChessCom,
+                errorText: invalid
+                    ? (_source == OnlineSource.lichess ? l10n.onlineUsernameInvalidLichess : l10n.onlineUsernameInvalidChessCom)
+                    : null,
+                errorMaxLines: 3,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            button: state.loading
+                ? OutlinedButton(
+                    key: const Key('onlineCancel'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(64, 48)),
+                    onPressed: controller.cancel,
+                    child: Text(l10n.onlineCancel),
+                  )
+                : FilledButton(
+                    key: const Key('onlineFetch'),
+                    style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
+                    onPressed: _valid && !state.importing ? _fetch : null,
+                    child: Text(state.phase == OnlinePhase.done ? l10n.onlineFetchAgain : l10n.onlineFetch),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: state.loading
-                    ? OutlinedButton(
-                        key: const Key('onlineCancel'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(64, 48)),
-                        onPressed: controller.cancel,
-                        child: Text(l10n.onlineCancel),
-                      )
-                    : FilledButton(
-                        key: const Key('onlineFetch'),
-                        style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
-                        onPressed: _valid && !state.importing ? _fetch : null,
-                        child: Text(state.phase == OnlinePhase.done ? l10n.onlineFetchAgain : l10n.onlineFetch),
-                      ),
-              ),
-            ],
           ),
         ),
         if (state.loading)

@@ -186,4 +186,143 @@ void main() {
       }
     });
   });
+
+  group('no logging beyond AppLog, no telemetry (SPEC 6, M8)', () {
+    Iterable<File> dartFiles(String dir) => Directory(dir)
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart') && !f.path.contains('/l10n/app_localizations'));
+
+    test('nothing in app/lib or packages/glyph_core/lib prints or logs except AppLog (and the host-only engine driver)', () {
+      final banned = RegExp(r'(^|[^A-Za-z_.])(print|debugPrint|debugPrintStack|log|dumpErrorToConsole)\(|developer\.(log|inspect)|\b(stdout|stderr)\.|dart:developer|FlutterError\.dumpErrorToConsole|\bdebugger\(');
+      for (final f in [...dartFiles('lib'), ...dartFiles('../packages/glyph_core/lib')]) {
+        if (f.path.endsWith('platform/app_log.dart')) continue;
+        if (f.path.endsWith('glyph_core_host.dart') || f.path.endsWith('process_engine_driver.dart')) continue;
+        final code = f.readAsLinesSync().where((l) => !l.trimLeft().startsWith('//') && !l.trimLeft().startsWith('///')).join('\n');
+        final m = banned.firstMatch(code);
+        expect(m, isNull, reason: '${f.path}: ${m?.group(0)}');
+      }
+    });
+
+    test('the Kotlin sources do not log either (no android.util.Log, println, printStackTrace)', () {
+      final files = Directory('android/app/src/main').listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.kt') || (f.path.endsWith('.java') && !f.path.endsWith('GeneratedPluginRegistrant.java')));
+      expect(files, isNotEmpty);
+      for (final f in files) {
+        final code = f.readAsStringSync();
+        expect(RegExp(r'android\.util\.Log|\bLog\.[a-z]\(|println\(|printStackTrace|Timber').hasMatch(code), isFalse, reason: f.path);
+      }
+    });
+
+    test('the only thing AppLog can do is warn, with a fixed message and the error type', () {
+      final code = File('lib/platform/app_log.dart').readAsStringSync();
+      // One public entry point, and it is at warning level (900) or above: release logs nothing quieter.
+      expect(RegExp(r'static void (?!Function)(\w+)\(').allMatches(code).map((m) => m.group(1)).toList(), ['warning']);
+      expect(code, contains('level: 900'));
+      expect(code, contains('error.runtimeType'));
+      expect(code, isNot(contains('error.toString')));
+      expect(code, isNot(contains(r"$error")));
+      expect(code, isNot(contains('stackTrace')));
+    });
+
+    test('AppLog survives an error whose toString throws and never prints its text', () {
+      final lines = <String>[];
+      final old = AppLog.sink;
+      AppLog.sink = lines.add;
+      addTearDown(() => AppLog.sink = old);
+      AppLog.warning('Something failed', _Hostile());
+      expect(lines, ['Something failed (_Hostile)']);
+      expect(lines.single, isNot(contains('sk-')));
+    });
+
+    test('no pubspec in the repository names an analytics, crash-reporting or ads package', () {
+      final banned = RegExp(r'^\s+(firebase\w*|sentry\w*|bugsnag\w*|crashlytics|google_mobile_ads|google_analytics\w*|mixpanel\w*|amplitude\w*|appsflyer\w*|posthog\w*|datadog\w*|instabug\w*|onesignal\w*|facebook\w*|appcenter\w*):', multiLine: true);
+      for (final path in ['pubspec.yaml', '../pubspec.yaml', '../packages/glyph_core/pubspec.yaml', '../pubspec.lock']) {
+        expect(banned.hasMatch(File(path).readAsStringSync()), isFalse, reason: path);
+      }
+    });
+
+    test('the Android build has no Firebase, Play Services or crash SDK', () {
+      final files = Directory('android').listSync(recursive: true).whereType<File>().where((f) {
+        final p = f.path;
+        return !p.contains('/build/') && !p.contains('/.gradle/') && (p.endsWith('.gradle') || p.endsWith('.kts') || p.endsWith('AndroidManifest.xml') || p.endsWith('gradle.properties'));
+      });
+      expect(files, isNotEmpty);
+      for (final f in files) {
+        final code = f.readAsLinesSync().where((l) => !l.trimLeft().startsWith('//') && !l.trimLeft().startsWith('#')).join('\n');
+        expect(RegExp('firebase|play-services|com\\.google\\.android\\.gms|crashlytics|io\\.sentry|bugsnag', caseSensitive: false).hasMatch(code), isFalse, reason: f.path);
+      }
+    });
+
+    group('tool/check_banned_deps.sh', () {
+      Future<ProcessResult> run(Directory root) => Process.run('bash', ['../tool/check_banned_deps.sh', root.path]);
+
+      Directory tree(Map<String, String> files) {
+        final dir = Directory.systemTemp.createTempSync('glyph_banned');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        files.forEach((path, content) {
+          File('${dir.path}/$path')
+            ..createSync(recursive: true)
+            ..writeAsStringSync(content);
+        });
+        return dir;
+      }
+
+      const cleanLock = 'packages:\n  http:\n    dependency: direct main\n  crypto:\n    dependency: transitive\n';
+
+      test('passes on this repository', () async {
+        final r = await Process.run('bash', ['../tool/check_banned_deps.sh']);
+        expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      });
+
+      test('passes on a clean tree', () async {
+        final r = await run(tree({'pubspec.lock': cleanLock, 'app/pubspec.yaml': 'dependencies:\n  http: ^1.0.0\n'}));
+        expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      });
+
+      for (final name in ['firebase_core', 'firebase_crashlytics', 'google_mobile_ads', 'sentry_flutter', 'bugsnag_flutter', 'mixpanel_flutter', 'posthog_flutter', 'appsflyer_sdk', 'datadog_flutter_plugin', 'onesignal_flutter', 'amplitude_flutter', 'facebook_app_events', 'google_analytics_flutter']) {
+        test('fails when pubspec.lock contains $name', () async {
+          final r = await run(tree({'pubspec.lock': '$cleanLock  $name:\n    dependency: transitive\n'}));
+          expect(r.exitCode, 1, reason: name);
+          expect('${r.stderr}', contains('banned dependency'));
+        });
+      }
+
+      test('fails when a pubspec.yaml declares one, even before pub get', () async {
+        final r = await run(tree({'pubspec.lock': cleanLock, 'app/pubspec.yaml': 'dependencies:\n  sentry: ^8.0.0\n'}));
+        expect(r.exitCode, 1);
+      });
+
+      test('fails on a Maven coordinate for Firebase or Play Services in a Gradle file', () async {
+        for (final dep in ['com.google.firebase:firebase-analytics:21.0.0', 'com.google.android.gms:play-services-base:18.0.0', 'io.sentry:sentry-android:7.0.0']) {
+          final r = await run(tree({'pubspec.lock': cleanLock, 'app/android/app/build.gradle.kts': 'dependencies {\n    implementation("$dep")\n}\n'}));
+          expect(r.exitCode, 1, reason: dep);
+        }
+      });
+
+      test('fails on a Play Services meta-data entry in a manifest, but a comment naming the ban is fine', () async {
+        final bad = await run(tree({'pubspec.lock': cleanLock, 'app/android/AndroidManifest.xml': '<manifest><application><meta-data android:name="com.google.android.gms.version"/></application></manifest>'}));
+        expect(bad.exitCode, 1);
+        final ok = await run(tree({'pubspec.lock': cleanLock, 'app/android/app/build.gradle.kts': '// no com.google.firebase here\n'}));
+        expect(ok.exitCode, 0, reason: '${ok.stdout}${ok.stderr}');
+      });
+
+      test('a tree without any pubspec.lock is an error, not a pass', () async {
+        final r = await run(tree({'app/pubspec.yaml': 'name: x\n'}));
+        expect(r.exitCode, 2);
+      });
+
+      test('the CI workflow runs it, and the permission check, on every push', () {
+        final ci = File('../.github/workflows/ci.yml').readAsStringSync();
+        expect(ci, contains('tool/check_banned_deps.sh'));
+        expect(ci, contains('tool/check_permissions.sh'));
+        expect(ci, contains('flutter build apk --release --split-per-abi'));
+        expect(ci, contains('push:'));
+      });
+    });
+  });
+}
+
+class _Hostile {
+  @override
+  String toString() => throw StateError('toString must never be called: sk-secret');
 }

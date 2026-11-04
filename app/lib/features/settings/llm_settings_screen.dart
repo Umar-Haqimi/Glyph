@@ -4,6 +4,7 @@ import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../errors/failure_text.dart';
 import '../explain/error_text.dart';
 import 'explain_settings.dart';
 import 'key_vault.dart';
@@ -236,11 +237,7 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
           decoration: InputDecoration(
             labelText: l10n.llmApiKeyHint,
             border: const OutlineInputBorder(),
-            errorText: switch (_keyProblem) {
-              null => null,
-              ApiKeyProblem.noValidUrl => l10n.llmApiKeyNeedsUrl,
-              _ => l10n.llmApiKeyInvalid,
-            },
+            errorText: _keyProblem == null ? null : apiKeyProblemText(l10n, _keyProblem!),
             suffixIcon: IconButton(
               key: const Key('llm-key-visibility'),
               tooltip: l10n.llmApiKeyShow,

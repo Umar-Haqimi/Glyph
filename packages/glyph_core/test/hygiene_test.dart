@@ -41,6 +41,21 @@ void main() {
       }
     });
 
+    test('the core has no logging package, no log() call and no print of any kind', () {
+      for (final f in sources('lib')) {
+        if (f.path.endsWith('glyph_core_host.dart') || f.path.contains('process_engine_driver')) continue;
+        final code = f.readAsLinesSync().where((l) => !l.trimLeft().startsWith('//')).join('\n');
+        expect(code, isNot(contains("package:logging")), reason: f.path);
+        expect(RegExp(r'(^|[^A-Za-z_.])(log|debugPrint|print|printError)\(').hasMatch(code), isFalse, reason: f.path);
+        expect(RegExp(r'developer\.(log|inspect)').hasMatch(code), isFalse, reason: f.path);
+      }
+    });
+
+    test('the core depends on no analytics, crash-reporting or telemetry package', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(RegExp(r'^\s+(firebase\w*|sentry\w*|bugsnag\w*|crashlytics|google_mobile_ads|mixpanel\w*|amplitude\w*|posthog\w*|datadog\w*|logging):', multiLine: true).hasMatch(pubspec), isFalse);
+    });
+
     test('LlmRequest and LlmConfig have no API key field', () {
       final code = File('lib/src/llm/llm_models.dart').readAsLinesSync().where((l) => !l.trimLeft().startsWith('//')).join('\n');
       expect(RegExp('apiKey|api_key|secret', caseSensitive: false).hasMatch(code), isFalse);
