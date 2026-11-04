@@ -1,0 +1,39 @@
+[
+  {
+    "name": "mate_opera_12_mistake",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6",
+    "ply": 12,
+    "expectedLabel": "mistake",
+    "note": "6...Nf6: 0.136 EP."
+  },
+  {
+    "name": "mate_opera_18_mistake",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5",
+    "ply": 18,
+    "expectedLabel": "mistake",
+    "note": "9...b5: 0.132 EP."
+  },
+  {
+    "name": "repetition_3_mistake",
+    "transcript": "repetition",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "Nf3 Nf6 Ng1",
+    "ply": 3,
+    "expectedLabel": "mistake",
+    "note": "2.Ng1: 0.102 EP."
+  },
+  {
+    "name": "lichess_PXXPWDlC_960_28_mistake",
+    "transcript": "lichess_PXXPWDlC_960",
+    "startFen": "brnkqbnr/pppppppp/8/8/8/8/PPPPPPPP/BRNKQBNR w KQkq - 0 1",
+    "moves": "e4 b5 Nf3 e5 b3 d6 d4 exd4 Bd3 Nf6 Nxd4 c5 Qa5+ Rb6 Nxb5 Qd7 O-O Be7 c4 Nxe4 Re1 f5 f3 Bh4 Rf1 Nf6 Qd2 O-O",
+    "ply": 28,
+    "expectedLabel": "mistake",
+    "note": "Chess960: 14...O-O (king to h-side rook) 0.120 EP.",
+    "variant": "chess960"
+  }
+]

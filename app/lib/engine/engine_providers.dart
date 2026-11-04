@@ -12,6 +12,7 @@ import '../features/settings/engine_settings.dart';
 import 'engine_service.dart';
 import 'multistockfish_driver.dart';
 import 'repository_analysis_store.dart';
+import 'review_service.dart';
 
 /// How engines are created. Tests override it with `FakeEngineDriver`
 /// (`package:glyph_core/testing.dart`).
@@ -94,6 +95,17 @@ class _EngineReloadGuardState extends ConsumerState<EngineReloadGuard> {
   Widget build(BuildContext context) => widget.child;
 }
 
+/// Labels and accuracy from finished analyses (M4). Tests override the
+/// repositories and the opening book, not this.
+final reviewServiceProvider = Provider<ReviewService>((ref) {
+  return ReviewService(
+    games: ref.watch(gameRepositoryProvider),
+    analyses: ref.watch(analysisRepositoryProvider),
+    settings: ref.watch(settingsRepositoryProvider),
+    book: () => ref.read(openingBookProvider.future),
+  );
+});
+
 /// The engine settings (depth preset, threads, hash).
 final engineSettingsProvider = FutureProvider<EngineSettings>(
   (ref) => EngineSettings.load(ref.watch(settingsRepositoryProvider)),
@@ -108,9 +120,12 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
   /// so the UI can show "cancelled" instead of waiting for a start.
   final Set<int> _cancelledWhileQueued = {};
 
+  late ReviewService _review;
+
   @override
   AnalysisJobState build() {
     _service = ref.watch(engineServiceProvider);
+    _review = ref.watch(reviewServiceProvider);
     final sub = _service.states.listen(_onState);
     ref.onDispose(sub.cancel);
     return _service.state;
@@ -120,10 +135,21 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
     state = s;
     final id = s.gameId;
     if (id != null && s.isFinished) {
-      // The stored summary changed: refresh whoever shows it.
-      ref.invalidate(gameProvider(id));
-      if (ref.exists(libraryProvider)) unawaited(ref.read(libraryProvider.notifier).refresh());
+      if (s is AnalysisCompleted) {
+        // Label the moves and compute accuracy before telling the UI.
+        unawaited(_review.classify(id).then((_) {}, onError: (Object _) {}).whenComplete(() => _refresh(id)));
+      } else {
+        _refresh(id);
+      }
     }
+  }
+
+  /// The stored summary changed: refresh whoever shows it.
+  void _refresh(int id) {
+    if (!ref.mounted) return;
+    ref.invalidate(gameProvider(id));
+    ref.invalidate(reviewDoneProvider(id));
+    if (ref.exists(libraryProvider)) unawaited(ref.read(libraryProvider.notifier).refresh());
   }
 
   bool isQueued(int gameId) => _service.isQueued(gameId);
@@ -186,3 +212,20 @@ class AnalysisQueueNotifier extends Notifier<List<int>> {
 }
 
 final analysisQueueProvider = NotifierProvider<AnalysisQueueNotifier, List<int>>(AnalysisQueueNotifier.new);
+
+/// Makes sure a completed game has its labels and accuracy (classifies it if
+/// they are missing, e.g. after a kill between the last ply and the review),
+/// then completes. The board watches it; M5 will read the labels.
+/// The value is true when it had to classify (the stored game changed).
+final reviewDoneProvider = FutureProvider.family<bool, int>(
+  (ref, gameId) => ref.watch(reviewServiceProvider).ensureClassified(gameId),
+);
+
+/// Runs once per app session (the library watches it): re-labels every
+/// analysed game when `ClassifierConfig.version` changed since the labels
+/// were stored (SPEC 5.4).
+final classifierUpkeepProvider = FutureProvider<int>((ref) async {
+  final n = await ref.watch(reviewServiceProvider).reclassifyIfStale();
+  if (n > 0 && ref.exists(libraryProvider)) unawaited(ref.read(libraryProvider.notifier).refresh());
+  return n;
+});

@@ -3,6 +3,7 @@ import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
+import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
 import '../import/import_sheet.dart';
@@ -17,6 +18,8 @@ class LibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final games = ref.watch(libraryProvider);
+    // Once per session: re-label analysed games after a classifier change.
+    ref.watch(classifierUpkeepProvider);
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.libraryTitle),
@@ -150,7 +153,7 @@ class GameCard extends StatelessWidget {
     };
   }
 
-  static String _accuracy(double v) => v.round().toString();
+  static String _accuracy(double v) => Accuracy.display(v).toString();
 
   @override
   Widget build(BuildContext context) {

@@ -39,6 +39,12 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     final id = widget.gameId;
     final game = id == null ? null : ref.watch(gameProvider(id)).value;
     _maybeAutoStart(game);
+    if (id != null && game?.analysisStatus == AnalysisStatus.completed) {
+      // Labels and accuracy for a completed analysis (M4); M5 shows them.
+      ref.listen(reviewDoneProvider(id), (_, next) {
+        if (next.value == true) ref.invalidate(gameProvider(id));
+      });
+    }
     final title = game == null
         ? l10n.boardTitle
         : l10n.boardTitleGame(

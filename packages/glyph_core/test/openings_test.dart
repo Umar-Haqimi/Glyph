@@ -18,22 +18,28 @@ void main() {
       expect(sha256.convert(bytes).toString(), recorded);
     });
 
-    test('3865 rows, unique EPDs, 4-field EPD keys', () {
+    test('3865 named rows, then 4117 unnamed book positions; unique 4-field EPDs', () {
       final lines = File(assetPath).readAsLinesSync();
-      expect(lines, hasLength(3865));
+      expect(lines, hasLength(3865 + 4117));
       final epds = lines.map((l) => l.split('\t').first).toSet();
-      expect(epds, hasLength(3865));
-      for (final l in lines) {
+      expect(epds, hasLength(lines.length));
+      for (final (i, l) in lines.indexed) {
         final f = l.split('\t');
         expect(f, hasLength(3));
         expect(f[0].split(' '), hasLength(4));
-        expect(f[1], matches(RegExp(r'^[A-E]\d\d$')));
+        if (i < 3865) {
+          expect(f[1], matches(RegExp(r'^[A-E]\d\d$')));
+          expect(f[2], isNotEmpty);
+        } else {
+          expect((f[1], f[2]), ('', ''), reason: 'unnamed rows come after the named ones');
+        }
       }
-      expect(epds.where((e) => !e.endsWith(' -')), hasLength(15), reason: 'legal en-passant squares only');
+      expect(epds.take(3865).where((e) => !e.endsWith(' -')), hasLength(15), reason: 'legal en-passant squares only');
     });
 
     test('tool output is reproducible from the chess-openings checkout (when present)', () {
-      final dir = Directory('${Platform.environment['HOME']}/development/upstream/chess-openings');
+      final dir = Directory(Platform.environment['CHESS_OPENINGS_DIR'] ??
+          '${Platform.environment['HOME']}/development/upstream/chess-openings');
       if (!dir.existsSync()) {
         markTestSkipped('chess-openings checkout not available');
         return;
@@ -47,6 +53,7 @@ void main() {
       final tsv = File(assetPath).readAsStringSync();
       final book = await OpeningBook.parseTsvAsync(tsv);
       expect(book.length, 3865);
+      expect(book.bookPositions, 3865 + 4117);
       expect(book.lookup('rnbqkbnr/pppppppp/8/8/8/7N/PPPPPPPP/RNBQKB1R b KQkq -')?.name, 'Amar Opening');
     });
   });
@@ -108,6 +115,15 @@ void main() {
       expect(book.lookup(fen)?.name, 'Amar Opening');
       expect(book.lookup('8/8/8/8/8/8/8/8 w - -'), isNull);
     });
+
+    test('unnamed steps of a named line are book but name nothing (Ruy Lopez 4.Ba4 Nf6)', () {
+      final a = book.annotate(game('1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O *'));
+      expect(a.bookPlies, 16, reason: 'every position is a step of a named Closed Ruy Lopez line');
+      expect(a.opening!.name, startsWith('Ruy Lopez'));
+      final afterBa4 = game('1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *').plies.last;
+      expect(book.lookup(afterBa4.fen), isNull);
+      expect(book.contains(afterBa4.fen), isTrue);
+    });
   });
 
   group('OpeningBook (small book)', () {
@@ -119,14 +135,38 @@ void main() {
           'B00\tFar line\t1. e4 e5 2. Nf3 Nf6 3. Nxe5\n',
     ]));
 
-    test('contiguous prefix stops at the gap, name is the deepest hit', () {
-      // 2...Nf6 (ply 4) is not a listed position, 3.Nxe5 (ply 5) is.
+    test('unnamed steps of a named line keep the prefix going', () {
+      // 2...Nf6 (ply 4) is not named, but it is a step of "Far line".
       final a = book.annotate(game('1. e4 e5 2. Nf3 Nf6 3. Nxe5 *'));
-      expect(a.bookPlies, 3);
-      expect(a.isBook(4), isFalse);
-      expect(a.isBook(5), isFalse, reason: 'back in a named position but the prefix is broken');
+      expect(a.bookPlies, 5);
       expect(a.opening!.name, 'Far line');
       expect(a.openingPly, 5);
+    });
+
+    test('contiguous prefix stops at the first non-book ply, name is the deepest hit', () {
+      // 2.Bc4 (ply 3) is off book in this small book.
+      final a = book.annotate(game('1. e4 e5 2. Bc4 Nf6 3. Nf3 Nc6 *'));
+      expect(a.bookPlies, 2);
+      expect(a.isBook(3), isFalse);
+      expect(a.opening!.name, "King's Pawn Game");
+      expect(a.openingPly, 2);
+    });
+
+    test('a later named position after a gap is not Book, but names the opening', () {
+      // 1.Nf3 e5 2.e4 transposes into the King's Knight Opening at ply 3.
+      final a = book.annotate(game('1. Nf3 e5 2. e4 Nc6 *'));
+      expect(a.bookPlies, 0);
+      expect(a.isBook(3), isFalse);
+      expect(a.opening!.name, "King's Knight Opening");
+      expect(a.openingPly, 3);
+    });
+
+    test('builder appends unnamed book positions after the named rows', () {
+      final tsv = buildOpeningsTsv(['h\nC40\tKK\t1. e4 e5 2. Nf3\n']);
+      final rows = tsv.split('\n').where((r) => r.isNotEmpty).toList();
+      expect(rows, hasLength(3));
+      expect(rows[0], endsWith('\tC40\tKK'));
+      expect(rows.skip(1).every((r) => r.endsWith('\t\t')), isTrue);
     });
 
     test('no listed position at all', () {

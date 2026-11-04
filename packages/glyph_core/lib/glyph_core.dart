@@ -3,7 +3,15 @@ library;
 
 export 'package:dartchess/dartchess.dart' show Side;
 
+export 'src/classify/accuracy.dart';
+export 'src/classify/classifier.dart';
+export 'src/classify/classifier_config.dart';
+export 'src/classify/expected_points.dart';
+export 'src/classify/game_review.dart';
+export 'src/classify/key_moments.dart';
 export 'src/classify/move_label.dart';
+export 'src/classify/see.dart';
+export 'src/classify/win_percent.dart';
 export 'src/engine/analysis_job.dart';
 export 'src/engine/analysis_pipeline.dart';
 export 'src/engine/engine_driver.dart';

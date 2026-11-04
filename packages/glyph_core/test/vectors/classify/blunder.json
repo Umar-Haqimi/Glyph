@@ -1,0 +1,83 @@
+[
+  {
+    "name": "p0_blunder_white_6_blunder",
+    "transcript": "p0_blunder_white",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Bc4 Nc6 Qh5 Nf6",
+    "ply": 6,
+    "expectedLabel": "blunder",
+    "note": "3...Nf6?? allows Qxf7#."
+  },
+  {
+    "name": "lichess_Lk80KJQh_26_blunder",
+    "transcript": "lichess_Lk80KJQh",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4",
+    "ply": 26,
+    "expectedLabel": "blunder",
+    "note": "13...Ne4?? allows a forced mate."
+  },
+  {
+    "name": "miss_hanging_knight_5_blunder",
+    "transcript": "miss_hanging_knight",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 Nc6 Nd4",
+    "ply": 5,
+    "expectedLabel": "blunder",
+    "note": "3.Nd4?? hangs a knight (0.414 EP)."
+  },
+  {
+    "name": "miss_hanging_knight_6_blunder",
+    "transcript": "miss_hanging_knight",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 Nc6 Nd4 Nf6",
+    "ply": 6,
+    "expectedLabel": "blunder",
+    "note": "3...Nf6 does not take, but stays above its pre-gift Win% + 5 (52.2 > 51.1): no Miss (a), so the 0.35 loss is a Blunder."
+  },
+  {
+    "name": "miss_no_capture_6_blunder",
+    "transcript": "miss_no_capture",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 Nc6 Nd4 d6",
+    "ply": 6,
+    "expectedLabel": "blunder",
+    "note": "Missed punish that drops below 50% (47.1): the Miss exception makes it a Blunder."
+  },
+  {
+    "name": "promotion_9_blunder",
+    "transcript": "promotion",
+    "startFen": "6k1/4P3/8/8/8/8/6K1/8 w - - 0 1",
+    "moves": "e8=Q+ Kg7 Qe5+ Kf7 Kf3 Kg6 Kf4 Kf7 Qe6+",
+    "ply": 9,
+    "expectedLabel": "blunder",
+    "note": "5.Qe6+?? hangs the queen: mate -> draw."
+  },
+  {
+    "name": "promotion_10_blunder",
+    "transcript": "promotion",
+    "startFen": "6k1/4P3/8/8/8/8/6K1/8 w - - 0 1",
+    "moves": "e8=Q+ Kg7 Qe5+ Kf7 Kf3 Kg6 Kf4 Kf7 Qe6+ Kg7",
+    "ply": 10,
+    "expectedLabel": "blunder",
+    "note": "5...Kg7?? misses Kxe6 and drops to 2.5 (< 50): Blunder, not Miss."
+  },
+  {
+    "name": "stalemate_1_blunder",
+    "transcript": "stalemate",
+    "startFen": "7k/8/5K2/8/8/8/8/6Q1 w - - 0 1",
+    "moves": "Qg6",
+    "ply": 1,
+    "expectedLabel": "blunder",
+    "note": "1.Qg6?? stalemates from a won position (W 97.5 -> 50)."
+  },
+  {
+    "name": "repetition_winning_8_blunder",
+    "transcript": "repetition_winning",
+    "startFen": "7k/8/8/8/8/8/5PPP/3Q2K1 b - - 0 1",
+    "moves": "Kg8 Qd2 Kh8 Qd1 Kg8 Qd2 Kh8 Qd1",
+    "ply": 8,
+    "expectedLabel": "blunder",
+    "note": "4.Qd1 completes a threefold repetition from a won position: the final repeated position is a draw (needs the full history, trap 9)."
+  }
+]

@@ -44,36 +44,66 @@ class BookAnnotation {
   bool isBook(int ply) => ply >= 1 && ply <= bookPlies;
 }
 
-/// Opening names keyed by EPD (first four FEN fields), so transpositions are
-/// recognised by position and not by move order (SPEC trap 7).
+/// Opening positions keyed by EPD (first four FEN fields), so transpositions
+/// are recognised by position and not by move order (SPEC trap 7).
+///
+/// The asset holds two kinds of rows: **named** positions (`epd\teco\tname`,
+/// the chess-openings entries) and **unnamed book positions** (`epd\t\t`, the
+/// steps on the way to a named position). Both count as book for the Book
+/// label; only named ones name the opening.
 class OpeningBook {
-  OpeningBook(Map<String, OpeningEntry> entries) : _entries = Map.unmodifiable(entries);
+  OpeningBook(Map<String, OpeningEntry> entries, {Set<String> unnamed = const {}})
+      : _entries = Map.unmodifiable(entries),
+        _unnamed = Set.unmodifiable(unnamed);
 
-  /// Parses the `epd\teco\tname` asset. Blank and malformed lines are skipped.
+  /// Parses the `epd\teco\tname` asset. Blank and malformed lines are skipped;
+  /// a row with an empty name is an unnamed book position.
   factory OpeningBook.parseTsv(String tsv) {
     final map = <String, OpeningEntry>{};
+    final unnamed = <String>{};
     for (final line in tsv.split('\n')) {
       if (line.isEmpty) continue;
       final f = line.split('\t');
-      if (f.length < 3) continue;
-      map[f[0]] = OpeningEntry(f[1], f[2]);
+      if (f.length < 3 || f[0].isEmpty) continue;
+      if (f[2].isEmpty) {
+        unnamed.add(f[0]);
+      } else {
+        map[f[0]] = OpeningEntry(f[1], f[2]);
+      }
     }
-    return OpeningBook(map);
+    unnamed.removeAll(map.keys);
+    return OpeningBook(map, unnamed: unnamed);
   }
 
-  /// Parses [tsv] in a background isolate (the asset has ~3.9k rows).
+  /// Parses [tsv] in a background isolate (the asset has ~9k rows).
   static Future<OpeningBook> parseTsvAsync(String tsv) =>
       Isolate.run(() => OpeningBook.parseTsv(tsv));
 
   final Map<String, OpeningEntry> _entries;
+  final Set<String> _unnamed;
 
+  /// Number of named positions.
   int get length => _entries.length;
 
-  /// Entry for an EPD (or a full FEN; only the first four fields are used).
+  /// Number of book positions (named plus unnamed).
+  int get bookPositions => _entries.length + _unnamed.length;
+
+  /// Named entry for an EPD (or a full FEN; only the first four fields are
+  /// used). Null for unnamed book positions.
   OpeningEntry? lookup(String epdOrFen) => _entries[epdOfFen(epdOrFen)];
+
+  /// Whether the position is a book position (named or not).
+  bool contains(String epdOrFen) {
+    final epd = epdOfFen(epdOrFen);
+    return _entries.containsKey(epd) || _unnamed.contains(epd);
+  }
 
   /// Book prefix and opening name of [game]. A game that does not start from
   /// the standard position (FEN start, Chess960) has no book.
+  ///
+  /// The prefix is contiguous: it ends at the first ply whose position is not
+  /// a book position (later book positions are not Book moves). The opening
+  /// is the deepest **named** position anywhere in the game.
   BookAnnotation annotate(Game game) {
     if (game.hasCustomStart || game.variant != GameVariant.standard) {
       return BookAnnotation.none;
@@ -83,14 +113,15 @@ class OpeningBook {
     OpeningEntry? opening;
     int? openingPly;
     for (final ply in game.plies) {
-      final entry = _entries[ply.epd];
-      if (entry == null) {
-        contiguous = false;
-        continue;
-      }
+      final epd = ply.epd;
+      final entry = _entries[epd];
+      final inBook = entry != null || _unnamed.contains(epd);
+      if (!inBook) contiguous = false;
       if (contiguous) prefix = ply.number;
-      opening = entry;
-      openingPly = ply.number;
+      if (entry != null) {
+        opening = entry;
+        openingPly = ply.number;
+      }
     }
     return BookAnnotation(bookPlies: prefix, opening: opening, openingPly: openingPly);
   }

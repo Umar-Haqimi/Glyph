@@ -1,0 +1,39 @@
+[
+  {
+    "name": "mate_opera_11_excellent",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4",
+    "ply": 11,
+    "expectedLabel": "excellent",
+    "note": "6.Bc4: 0.011 EP, not the top move (Qb3)."
+  },
+  {
+    "name": "mate_opera_22_excellent",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5 Nxb5 cxb5 Bxb5+ Nbd7",
+    "ply": 22,
+    "expectedLabel": "excellent",
+    "note": "11...Nbd7: 0.010 EP."
+  },
+  {
+    "name": "lichess_Lk80KJQh_12_excellent",
+    "transcript": "lichess_Lk80KJQh",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6",
+    "ply": 12,
+    "expectedLabel": "excellent",
+    "note": "6...Nf6: 0.017 EP."
+  },
+  {
+    "name": "lichess_PXXPWDlC_960_14_excellent",
+    "transcript": "lichess_PXXPWDlC_960",
+    "startFen": "brnkqbnr/pppppppp/8/8/8/8/PPPPPPPP/BRNKQBNR w KQkq - 0 1",
+    "moves": "e4 b5 Nf3 e5 b3 d6 d4 exd4 Bd3 Nf6 Nxd4 c5 Qa5+ Rb6",
+    "ply": 14,
+    "expectedLabel": "excellent",
+    "note": "Chess960: 7...Rb6 0.001 EP.",
+    "variant": "chess960"
+  }
+]

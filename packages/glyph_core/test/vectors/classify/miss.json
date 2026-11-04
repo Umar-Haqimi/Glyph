@@ -1,0 +1,47 @@
+[
+  {
+    "name": "repetition_4_miss",
+    "transcript": "repetition",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "Nf3 Nf6 Ng1 Ng8",
+    "ply": 4,
+    "expectedLabel": "miss",
+    "note": "Miss (a): White's 2.Ng1 lost 0.10 EP; 2...Ng8 loses 0.11 and leaves Black at 46.7 <= 47.6 + 5 (its Win% before the error)."
+  },
+  {
+    "name": "miss_pawn_up_2_miss",
+    "transcript": "miss_pawn_up",
+    "startFen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/1PPP1PPP/RNBQKB1R w KQkq - 2 3",
+    "moves": "Nd4 a6",
+    "ply": 2,
+    "expectedLabel": "miss",
+    "note": "Miss (a): White hangs a knight (2.Nd4??), Black does not take (2...a6) and is back where it was (59.1 <= 54.3+5, still > 50)."
+  },
+  {
+    "name": "miss_pawn_up_nf6_2_miss",
+    "transcript": "miss_pawn_up_nf6",
+    "startFen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/1PPP1PPP/RNBQKB1R w KQkq - 2 3",
+    "moves": "Nd4 Nf6",
+    "ply": 2,
+    "expectedLabel": "miss",
+    "note": "Miss (a): same blunder, 2...Nf6 does not take either."
+  },
+  {
+    "name": "missed_mate3_27_miss",
+    "transcript": "missed_mate3",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4 Rxe4",
+    "ply": 27,
+    "expectedLabel": "miss",
+    "note": "Miss (b): mate in 3 (Qxf7+) missed; 14.Rxe4 keeps W 68.3 > 50, loss 0.29."
+  },
+  {
+    "name": "missed_mate2_29_miss",
+    "transcript": "missed_mate2",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4 Qxf7+ Kh8 Rxe4",
+    "ply": 29,
+    "expectedLabel": "miss",
+    "note": "Miss (b): missed mate in 2 (Ng6+); 15.Rxe4 loses 0.067 EP (>= 0.05)."
+  }
+]

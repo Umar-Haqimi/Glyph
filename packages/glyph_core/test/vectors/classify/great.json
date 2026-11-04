@@ -1,0 +1,49 @@
+[
+  {
+    "name": "blunder_white_13_great",
+    "transcript": "blunder_white",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5 Nxf7 Kxf7 Qf3+",
+    "ply": 13,
+    "expectedLabel": "great",
+    "note": "7.Qf3+: line 1 W 58.1, line 2 W 19.3 (losing bucket), not a recapture. Rules only (book off).",
+    "book": false
+  },
+  {
+    "name": "mate_opera_19_great",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5 Nxb5",
+    "ply": 19,
+    "expectedLabel": "great",
+    "note": "10.Nxb5!: the only move that keeps the win (87.0 vs 63.4, winning -> unclear); Black's b5 was a pawn move, not a capture."
+  },
+  {
+    "name": "lichess_Lk80KJQh_27_great",
+    "transcript": "lichess_Lk80KJQh",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4 Qxf7+",
+    "ply": 27,
+    "expectedLabel": "great",
+    "note": "14.Qxf7+ (the knight on e5 covers f7, so Kxf7 is illegal: no sacrifice): the only move that keeps the forced mate (97.5 vs 68.3).",
+    "sacrifice": false
+  },
+  {
+    "name": "promotion_kxe6_10_great",
+    "transcript": "promotion_kxe6",
+    "startFen": "6k1/4P3/8/8/8/8/6K1/8 w - - 0 1",
+    "moves": "e8=Q+ Kg7 Qe5+ Kf7 Kf3 Kg6 Kf4 Kf7 Qe6+ Kxe6",
+    "ply": 10,
+    "expectedLabel": "great",
+    "note": "5...Kxe6: only-move defence; every other move is mated (50.0 vs 2.5). White's Qe6+ was not a capture, so this is no \"obvious recapture\"."
+  },
+  {
+    "name": "underpromotion_1_great",
+    "transcript": "underpromotion",
+    "startFen": "8/4P1k1/3q4/8/8/8/7P/6K1 w - - 0 1",
+    "moves": "e8=N+",
+    "ply": 1,
+    "expectedLabel": "great",
+    "note": "1.e8=N+ (underpromotion): the knight fork is the only winning move (93.0 vs 50.0 for e8=Q)."
+  }
+]

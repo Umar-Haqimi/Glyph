@@ -1,0 +1,39 @@
+[
+  {
+    "name": "mate_opera_20_inaccuracy",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5 Nxb5 cxb5",
+    "ply": 20,
+    "expectedLabel": "inaccuracy",
+    "note": "10...cxb5: 0.085 EP."
+  },
+  {
+    "name": "queen_trade_check_7_inaccuracy",
+    "transcript": "queen_trade_check",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "d4 d5 c4 dxc4 e4 e5 dxe5",
+    "ply": 7,
+    "expectedLabel": "inaccuracy",
+    "note": "4.dxe5: 0.076 EP (just out of book)."
+  },
+  {
+    "name": "repetition_7_inaccuracy",
+    "transcript": "repetition",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "Nf3 Nf6 Ng1 Ng8 Nf3 Nf6 Ng1",
+    "ply": 7,
+    "expectedLabel": "inaccuracy",
+    "note": "4.Ng1: 0.097 EP."
+  },
+  {
+    "name": "lichess_PXXPWDlC_960_3_inaccuracy",
+    "transcript": "lichess_PXXPWDlC_960",
+    "startFen": "brnkqbnr/pppppppp/8/8/8/8/PPPPPPPP/BRNKQBNR w KQkq - 0 1",
+    "moves": "e4 b5 Nf3",
+    "ply": 3,
+    "expectedLabel": "inaccuracy",
+    "note": "Chess960: 2.Nf3 0.067 EP.",
+    "variant": "chess960"
+  }
+]

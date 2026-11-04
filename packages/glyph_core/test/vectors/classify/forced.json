@@ -1,0 +1,47 @@
+[
+  {
+    "name": "mate_opera_32_forced",
+    "transcript": "mate_opera",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5 Nxb5 cxb5 Bxb5+ Nbd7 O-O-O Rd8 Rxd7 Rxd7 Rd1 Qe6 Bxd7+ Nxd7 Qb8+ Nxb8",
+    "ply": 32,
+    "expectedLabel": "forced",
+    "note": "16...Nxb8: the only legal move."
+  },
+  {
+    "name": "queen_trade_check_9_forced",
+    "transcript": "queen_trade_check",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "d4 d5 c4 dxc4 e4 e5 dxe5 Qxd1+ Kxd1",
+    "ply": 9,
+    "expectedLabel": "forced",
+    "note": "5.Kxd1 after 4...Qxd1+: the only legal move (a recapture, but Forced comes first)."
+  },
+  {
+    "name": "forced_check_2_forced",
+    "transcript": "forced_check",
+    "startFen": "7k/6p1/8/8/8/8/5PPP/R5K1 w - - 0 1",
+    "moves": "Ra8+ Kh7",
+    "ply": 2,
+    "expectedLabel": "forced",
+    "note": "1...Kh7: the only legal reply to the check."
+  },
+  {
+    "name": "lichess_Lk80KJQh_28_forced",
+    "transcript": "lichess_Lk80KJQh",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4 Qxf7+ Kh8",
+    "ply": 28,
+    "expectedLabel": "forced",
+    "note": "14...Kh8 after Qxf7+: the only legal move."
+  },
+  {
+    "name": "lichess_Lk80KJQh_30_forced",
+    "transcript": "lichess_Lk80KJQh",
+    "startFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "moves": "b3 e6 Bb2 d5 Nf3 c5 e4 Nc6 exd5 exd5 Bb5 Nf6 O-O Be7 Ne5 Bd7 Bxc6 bxc6 Re1 O-O Nc3 Bd6 Na4 Re8 Qf3 Ne4 Qxf7+ Kh8 Ng6+ hxg6",
+    "ply": 30,
+    "expectedLabel": "forced",
+    "note": "15...hxg6: the only legal move (captures the checking knight)."
+  }
+]
