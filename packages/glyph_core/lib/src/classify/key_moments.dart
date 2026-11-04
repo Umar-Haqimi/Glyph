@@ -33,37 +33,34 @@ class KeyMoment {
 
 abstract final class KeyMoments {
   /// Labels that make a key moment.
-  static const labels = {
-    MoveLabel.brilliant,
-    MoveLabel.great,
-    MoveLabel.miss,
-    MoveLabel.mistake,
-    MoveLabel.blunder,
-  };
+  static const labels = {MoveLabel.brilliant, MoveLabel.great, MoveLabel.miss, MoveLabel.mistake, MoveLabel.blunder};
 
   /// All key moments in ply order.
   static List<KeyMoment> of(Iterable<ClassifiedMove?> moves) => [
-        for (final m in moves)
-          if (m != null && labels.contains(m.label))
-            KeyMoment(
-              ply: m.ply,
-              side: m.side,
-              label: m.label,
-              winBefore: m.winBefore,
-              winAfter: m.winAfter,
-              bestUci: m.bestUci,
-            ),
-      ];
+    for (final m in moves)
+      if (m != null && labels.contains(m.label))
+        KeyMoment(
+          ply: m.ply,
+          side: m.side,
+          label: m.label,
+          winBefore: m.winBefore,
+          winAfter: m.winAfter,
+          bestUci: m.bestUci,
+        ),
+  ];
 
   /// Moments of one side.
-  static List<KeyMoment> ofSide(Iterable<KeyMoment> moments, Side side) =>
-      [for (final m in moments) if (m.side == side) m];
+  static List<KeyMoment> ofSide(Iterable<KeyMoment> moments, Side side) => [
+    for (final m in moments)
+      if (m.side == side) m,
+  ];
 
   /// At most [limit] moments for the game summary (SPEC 5.5: <= 8), the
   /// Brilliant and Great moves first, then the biggest Win% losses; the
   /// result is returned in ply order.
   static List<KeyMoment> mostSignificant(List<KeyMoment> moments, {int limit = 8}) {
-    final ranked = [...moments]..sort((a, b) {
+    final ranked = [...moments]
+      ..sort((a, b) {
         final byWeight = _weight(b).compareTo(_weight(a));
         return byWeight != 0 ? byWeight : a.ply.compareTo(b.ply);
       });
@@ -71,7 +68,7 @@ abstract final class KeyMoments {
   }
 
   static double _weight(KeyMoment m) => switch (m.label) {
-        MoveLabel.brilliant || MoveLabel.great => 100,
-        _ => m.swing,
-      };
+    MoveLabel.brilliant || MoveLabel.great => 100,
+    _ => m.swing,
+  };
 }

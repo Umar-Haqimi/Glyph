@@ -19,6 +19,29 @@ class TranscriptGame {
 
   /// dartchess UCI (castling = king takes rook).
   final List<String> moves;
+
+  /// The game as PGN text (`SetUp`/`FEN` tags for a custom start, SAN
+  /// movetext, result `*`), e.g. to import it like a pasted game.
+  String toPgn() {
+    final b = StringBuffer();
+    if (startFen != kInitialFEN) b.write('[SetUp "1"]\n[FEN "$startFen"]\n\n');
+    Position pos = Position.setupPosition(Rule.chess, Setup.parseFen(startFen), ignoreImpossibleCheck: true);
+    var fullmove = pos.fullmoves;
+    for (var i = 0; i < moves.length; i++) {
+      final move = Move.parse(moves[i])!;
+      if (pos.turn == Side.white) {
+        b.write('$fullmove. ');
+      } else if (i == 0) {
+        b.write('$fullmove... ');
+      }
+      final (next, san) = pos.makeSan(move);
+      b.write('$san ');
+      if (pos.turn == Side.black) fullmove++;
+      pos = next;
+    }
+    b.write('*');
+    return b.toString();
+  }
 }
 
 List<TranscriptGame> parseTranscriptGames(String json) {

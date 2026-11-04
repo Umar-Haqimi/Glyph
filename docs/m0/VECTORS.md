@@ -4,7 +4,7 @@
 Arch Linux; Stockfish 19 desktop (`$STOCKFISH_PATH`, net nn-1a298aa575a0.nnue 109 MiB); Dart 3.13.7; curl (HTTP/2). Upstream commits: lila 9e780e9, scalachess b73baa5, chess-openings 3fd6ce9, api bbd21a7. `source ~/development/glyph-env.sh` first. Always send UA `Glyph-M0-research (https://github.com/umarh/glyph)`.
 
 ## 1. winpercent.json
-`tool/gen_winpercent.dart` writes `{cp: -2000..2000 step 50 -> win}` plus mate entries `{"mate": +-1, +-5, +-30 -> win}` using: clamp cp to +-1000; `win = 50 + 50*(2/(1+exp(-0.00368208*cp))-1)`; every mate = +-1000 cp (scalachess eval.scala L95-110). Reference values: win(0)=50, win(15)=51.380429102931544, win(100)=59.10258971916128, win(+-1000)=97.54474363414323 / 2.4552563658567763. Tolerance 1e-9.
+`cd packages/glyph_core && dart run tool/gen_winpercent.dart` (M4) writes `test/vectors/winpercent.json`: `{cp: -2000..2000 step 50 -> win}` plus mate entries `{"mate": +-1, +-5, +-30 -> win}` using: clamp cp to +-1000; `win = 50 + 50*(2/(1+exp(-0.00368208*cp))-1)`; every mate = +-1000 cp (scalachess eval.scala L95-110). Reference values: win(0)=50, win(15)=51.380429102931544, win(100)=59.10258971916128, win(+-1000)=97.54474363414323 / 2.4552563658567763. Tolerance 1e-9.
 
 ## 2. lichess_accuracy/*.ndjson (P0)
 `tool/fetch_lichess_vectors.dart`: one request at a time, `sleep 3 s` between, stop on 429 and wait 60 s.
@@ -21,6 +21,7 @@ Selection (target >= 32 games, keep game JSON minus pgn if size matters; redact 
 - >= 1 game whose first mover is Black is NOT available via API for variants=standard (needs FEN start); cover Black-start by unit tests from lila's AccuracyPercentTest instead.
 Test input: `analysis[]` white-POV `eval`/`mate`, prepend initial eval **15 cp**, startColor from `initialFen` (default white). Mate -> +-1000cp. Expected: `players.{white,black}.analysis.accuracy` (int); require `round(glyph) == expected` (spec tolerance +-1 is looser).
 Reference implementation (Python) used for validation is described by the pseudocode in algorithms.md 1.3.
+**M4 (done):** `dart run tool/fetch_lichess_vectors.dart` (repo root) writes `packages/glyph_core/test/vectors/lichess_accuracy/standard.ndjson` (34) and `chess960.ndjson` (4); `m0_sample.ndjson` holds the 2 M0 games. Lines are trimmed to `{id, variant, speed, status, winner?, initialFen?, plies, moves, analysis:[{eval}|{mate}], accuracy:{white, black}}` (no user names, ratings, titles). The API returns the latest games, so a re-run picks different games; the committed files are the reference. Test: `test/classify/win_percent_accuracy_test.dart` (exact equality after rounding, 80/80).
 
 ## 3. uci_transcripts/*.txt
 `tool/record_transcripts.dart` using ProcessEngineDriver; session:
@@ -34,6 +35,10 @@ Record raw stdout verbatim plus a header comment (`# stockfish 19, nn-1a298aa575
 - Mate: `6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1` -> `score mate 1 ... pv d1d8`, multipv 2 `cp 668`.
 - Terminal: `7k/5Q2/6K1/8/8/8/8/8 b` (mate), `7k/5Q2/8/6K1/8/8/8/8 b` (stalemate).
 Determinism: use Threads=1; node counts are stable on the same binary/hash.
+**M4:** 19 more games were appended to `games.json` (classification vectors, P0 pair `p0_blunder_white`/`p0_blunder_black`, two lichess games incl. Chess960) and recorded in the cloud container with **Stockfish 16** (`STOCKFISH_PATH=/usr/games/stockfish dart run tool/record_transcripts.dart`), since no SF19 binary was available there. Re-record them with SF19 (`dart run tool/record_transcripts.dart <names> `) on the dev machine and re-check `test/vectors/classify/*.json`.
+
+## 3b. classify/*.json (M4)
+`packages/glyph_core/test/vectors/classify/<label>.json`: arrays of `{name, transcript, startFen, moves, ply, expectedLabel, note}` (+ optional `book`, `variant`, `epLoss`, `sacrifice`). `moves` is SAN up to and including `ply`, a prefix of the transcript game. To add a case: add the game to `games.json`, record it, run the classifier on it (e.g. a temporary test printing `reviewGame(...).moves`), and add the case with a note explaining the numbers.
 
 ## 4. SSE captures (sse/)
 Use a throwaway key from env; redact with sed before saving. Never commit raw files.

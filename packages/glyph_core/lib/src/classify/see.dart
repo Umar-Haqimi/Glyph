@@ -18,13 +18,13 @@ abstract final class See {
 
   /// Piece values used by SEE and by the classifier (SPEC 2.1).
   static int value(Role role) => switch (role) {
-        Role.pawn => 1,
-        Role.knight => 3,
-        Role.bishop => 3,
-        Role.rook => 5,
-        Role.queen => 9,
-        Role.king => kingValue,
-      };
+    Role.pawn => 1,
+    Role.knight => 3,
+    Role.bishop => 3,
+    Role.rook => 5,
+    Role.queen => 9,
+    Role.king => kingValue,
+  };
 
   /// Net material the side to move in [position] gains by playing the
   /// capture [move] and the best exchange that follows on its target square

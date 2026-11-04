@@ -72,7 +72,8 @@ class ClassifiedMove {
   final bool punishedOpponentError;
 
   @override
-  String toString() => 'ClassifiedMove($ply $uci ${label.name} ep=${epLoss?.toStringAsFixed(4)} '
+  String toString() =>
+      'ClassifiedMove($ply $uci ${label.name} ep=${epLoss?.toStringAsFixed(4)} '
       'win ${winBefore?.toStringAsFixed(2)} -> ${winAfter?.toStringAsFixed(2)} best=$bestUci)';
 }
 
@@ -217,7 +218,8 @@ class Classifier {
     // A checkmating move is Best, never Great (SPEC 7.1: "mate-in-1
     // delivered -> Best"), even when line 2 is far worse.
     final deliversMate = after.terminal?.kind == TerminalKind.checkmate;
-    final onlyMove = isTop &&
+    final onlyMove =
+        isTop &&
         !deliversMate &&
         wLine2 != null &&
         wBest - wLine2 >= config.greatMinGap &&
@@ -226,18 +228,21 @@ class Classifier {
         !forced;
 
     // Miss (a): the opponent erred, the reply gave most of it back.
-    final opponentErred = previous != null &&
+    final opponentErred =
+        previous != null &&
         previous.epLoss != null &&
         previous.winBefore != null &&
         previous.epLoss! >= config.missOpponentMinLoss;
-    final missA = opponentErred &&
+    final missA =
+        opponentErred &&
         loss >= config.missMinLoss &&
         wAfter <= (100 - previous.winBefore!) + config.missGiveBackMargin;
 
     // Miss (b): a forced mate in <= 5 was let go.
     final mateIn = _mateFor(line1.score, mover);
     final hadShortMate = mateIn != null && mateIn <= config.missMateMaxMoves;
-    final keepsMate = isTop ||
+    final keepsMate =
+        isTop ||
         (isSecond && _mateFor(line2!.score, mover) != null) ||
         (after.terminal?.winner == mover) ||
         (!isSecond && !after.drawnByRule && _mateFor(_rank(lines[ply], 1)?.score, mover) != null);

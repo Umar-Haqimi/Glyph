@@ -52,4 +52,19 @@ void main() {
     expect(g.moves, ['e2e4', 'e7e5', 'g1f3']);
     expect(() => parseTranscriptGames('[{"name":"a","moves":"e5"}]'), throwsFormatException);
   });
+
+  test('TranscriptGame.toPgn re-imports to the same moves (every listed game)', () {
+    for (final g in transcriptGames()) {
+      final parsed = parsePgn(g.toPgn()).games.single;
+      expect(parsed.startFen, g.startFen, reason: g.name);
+      expect([for (final p in parsed.plies) p.uci], g.moves, reason: g.name);
+    }
+  });
+
+  test('every transcript names its engine; listed games all have one', () {
+    for (final g in transcriptGames()) {
+      final t = loadTranscript(g.name);
+      expect(t.header.first, matches(RegExp(r'^Stockfish (16|19)')), reason: g.name);
+    }
+  });
 }

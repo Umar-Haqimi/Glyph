@@ -6,6 +6,7 @@ import 'package:glyph/data/models.dart';
 import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/features/board/board_screen.dart';
 import 'package:glyph/l10n/app_localizations.dart';
+import 'package:glyph_core/glyph_core.dart' show MoveLabel;
 import 'package:glyph_core/testing.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -74,6 +75,47 @@ void main() {
     final stored = (await env.analyses.get(id))!;
     expect((stored.status, stored.completedPlies, stored.depth, stored.multipv), (AnalysisStatus.completed, 9, 16, 2));
     expect(await env.analyses.positionLines(id), hasLength(9)); // permissive fake: one line per position
+  });
+
+  testWidgets('a completed analysis is classified: labels and accuracy are stored (M4)', (tester) async {
+    final env = TestEnv(book: realBook());
+    final id = await save(env);
+    await pumpBoard(tester, env, id);
+    await settle(tester, rounds: 60);
+    expect(status(tester), l10n.analysisCompleted);
+    final labels = await env.analyses.labels(id);
+    expect(labels, hasLength(8));
+    // 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.c3 Nf6 is all book.
+    expect(labels.every((l) => l.label == MoveLabel.book), isTrue);
+    final a = (await env.analyses.get(id))!;
+    expect(a.whiteAccuracy, isNotNull);
+    expect(a.blackAccuracy, isNotNull);
+    expect((await env.games.get(id))!.whiteAccuracy, a.whiteAccuracy);
+  });
+
+  testWidgets('opening a completed game whose labels are missing classifies it', (tester) async {
+    final env = TestEnv();
+    final id = await save(env);
+    // A finished analysis whose review never ran (app killed in between).
+    await env.analyses.upsert(AnalysisRecord(
+      gameId: id,
+      engine: 'Stockfish 19 light',
+      depth: 16,
+      multipv: 2,
+      status: AnalysisStatus.running,
+      updatedAt: 1,
+    ));
+    for (var ply = 0; ply <= 8; ply++) {
+      await env.analyses.savePosition(id, ply, [
+        PositionLineRecord(gameId: id, ply: ply, rank: 1, scoreCp: 20, depth: 16, pvUci: ''),
+      ], completedPlies: ply + 1, updatedAt: 1);
+    }
+    await env.analyses.upsert((await env.analyses.get(id))!.copyWith(status: AnalysisStatus.completed));
+    expect(await env.analyses.labels(id), isEmpty);
+    await pumpBoard(tester, env, id);
+    await settle(tester, rounds: 60);
+    expect(await env.analyses.labels(id), hasLength(8));
+    expect((await env.analyses.get(id))!.whiteAccuracy, isNotNull);
   });
 
   testWidgets('shows "Analysing… k/N" with Cancel; Cancel then Resume finishes', (tester) async {

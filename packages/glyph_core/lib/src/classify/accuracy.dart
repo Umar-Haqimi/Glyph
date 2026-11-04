@@ -73,10 +73,7 @@ abstract final class Accuracy {
         windows.add(whiteWins.sublist(i, i + ws));
       }
     }
-    final weights = [
-      for (final w in windows)
-        w.contains(null) ? null : _stdDev(w.cast<double>()).clamp(0.5, 12.0),
-    ];
+    final weights = [for (final w in windows) w.contains(null) ? null : _stdDev(w.cast<double>()).clamp(0.5, 12.0)];
 
     final acc = {Side.white: <double>[], Side.black: <double>[]};
     final wts = {Side.white: <double>[], Side.black: <double>[]};
@@ -114,11 +111,10 @@ abstract final class Accuracy {
   /// [ofGame] from White-POV centipawns (mates already mapped to ±1000 or
   /// any |cp| >= 1000), with lichess's initial +15 cp prepended when
   /// [initialCp] is given.
-  static GameAccuracy ofCentipawns(List<int?> whiteCps, {Side startSide = Side.white, int? initialCp}) =>
-      ofGame([
-        if (initialCp != null) WinPercent.fromCp(initialCp),
-        for (final cp in whiteCps) cp == null ? null : WinPercent.fromCp(cp),
-      ], startSide: startSide);
+  static GameAccuracy ofCentipawns(List<int?> whiteCps, {Side startSide = Side.white, int? initialCp}) => ofGame([
+    if (initialCp != null) WinPercent.fromCp(initialCp),
+    for (final cp in whiteCps) cp == null ? null : WinPercent.fromCp(cp),
+  ], startSide: startSide);
 
   /// Display value: rounded half up like scalalib's `Percent.toInt`
   /// (`Math.round`).

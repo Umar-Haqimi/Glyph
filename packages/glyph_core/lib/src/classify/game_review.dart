@@ -52,12 +52,7 @@ EngineLine? engineLineFromStored({
 }) {
   final score = WhiteScore.fromStored(cp: scoreCp, mate: scoreMate);
   if (score == null) return null;
-  return EngineLine(
-    rank: rank,
-    score: score,
-    depth: depth,
-    pv: pvUci.split(' ').where((m) => m.isNotEmpty).toList(),
-  );
+  return EngineLine(rank: rank, score: score, depth: depth, pv: pvUci.split(' ').where((m) => m.isNotEmpty).toList());
 }
 
 /// The `ClassifyGame` + `ComputeAccuracy` use case (SPEC 5.3): labels, accuracy,

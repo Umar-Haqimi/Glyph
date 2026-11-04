@@ -7,12 +7,14 @@ enum TerminalKind { checkmate, stalemate, insufficientMaterial }
 /// sent to the engine** (SPEC trap 4; Stockfish 19 answers `bestmove (none)`
 /// for mate and stalemate and would still search a bare K v K).
 ///
-/// ### Scoring rule (shared by the pipeline and, in M4, the classifier)
+/// ### Scoring rule
 ///
-/// * [TerminalKind.checkmate]: decisive. The side that is **not** to move
-///   (the side that just moved) won: White Win% is 100 if [winner] is White,
-///   0 if it is Black. (Not the 97.54 / 2.46 of a mate *score*: the result is
-///   certain.)
+/// * [TerminalKind.checkmate]: decisive; the side that is **not** to move
+///   (the side that just moved) won. [whiteWinPercent] reports the certain
+///   result, 100 / 0. The classifier and accuracy (M4) instead score a
+///   checkmate like a mate score, `WinPercent.mateWin` (97.54 / 2.46, the
+///   scalachess ±1000 cp rule), so a mating move and a mate-in-1 line agree
+///   and accuracy matches lichess (docs/DECISIONS.md, M4).
 /// * [TerminalKind.stalemate] and [TerminalKind.insufficientMaterial]: draw,
 ///   Win% 50 (equivalent to cp 0).
 ///
