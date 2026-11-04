@@ -1,0 +1,28 @@
+Modified copy of chessground 11.0.0
+
+chessground (https://github.com/lichess-org/flutter-chessground, "flutter-chessground")
+is Copyright (C) the lichess.org contributors and is licensed under the GNU General
+Public License, version 3 (see LICENSE in this directory). This directory is a
+MODIFIED copy of the published package chessground 11.0.0, vendored by the Glyph
+project (GPL-3.0-or-later) and distributed under the same licence (GPL-3.0 section 5a:
+prominent notice that the work was modified, and the date of the change).
+
+Changes against the upstream 11.0.0 release:
+
+1. pubspec.yaml was replaced: the same dependencies, but only the assets listed
+   below are declared as Flutter assets.
+2. Assets REMOVED (not licensed for redistribution with Glyph, or not needed):
+   - every piece set except `cburnett` (assets/piece_sets/<name>/ for all other names);
+   - every board image that is not in the allow-list of tool/vendor_chessground.sh,
+     in particular the `horsey` board images (assets/boards/horsey*).
+   The assets that are kept: assets/piece_sets/cburnett/ and the board images of the
+   allow-list in tool/vendor_chessground.sh (assets/boards/).
+3. The Dart sources under lib/ are UNCHANGED. Consequently the enum `PieceSet` and
+   the colour schemes of `ChessboardColorScheme` still name assets that are no longer
+   present (all piece sets but cburnett, `ChessboardColorScheme.horsey`). Using
+   them would fail at run time with a missing asset. Glyph's app code therefore
+   reaches these only through app/lib/features/board/board_assets.dart, and a test
+   (app/test/hygiene_test.dart) fails if anything else references them.
+
+Date of this vendoring: see the git history of this directory.
+Re-create with: tool/vendor_chessground.sh 11.0.0

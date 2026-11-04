@@ -122,8 +122,8 @@ class InMemoryAnalysisRepository implements AnalysisRepository {
   }
 
   @override
-  Future<List<PositionLineRecord>> positionLines(int gameId) async {
-    final out = [for (final e in store.lines.entries) if (e.key.$1 == gameId) e.value];
+  Future<List<PositionLineRecord>> positionLines(int gameId, {int fromPly = 0}) async {
+    final out = [for (final e in store.lines.entries) if (e.key.$1 == gameId && e.key.$2 >= fromPly) e.value];
     out.sort((a, b) => a.ply != b.ply ? a.ply.compareTo(b.ply) : a.rank.compareTo(b.rank));
     return out;
   }

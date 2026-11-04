@@ -193,3 +193,53 @@ class _MarkPainter extends CustomPainter {
   @override
   bool shouldRepaint(_MarkPainter old) => old.label != label || old.color != color || old.background != background;
 }
+
+/// Scales [child] in over 150 ms when it is created with [play] true, or when
+/// [play] turns true later (SPEC section 4: badges pop in as the analysis
+/// fills them in). Nothing moves when the system asks for reduced motion, or
+/// when [play] is false (a chip scrolled into view must not animate).
+class PopIn extends StatefulWidget {
+  const PopIn({super.key, required this.play, required this.child});
+
+  final bool play;
+  final Widget child;
+
+  @override
+  State<PopIn> createState() => _PopInState();
+}
+
+class _PopInState extends State<PopIn> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this, duration: popInDuration, value: 1);
+  late final Animation<double> _scale = CurvedAnimation(parent: _controller, curve: Curves.easeOutBack);
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started && widget.play) _start();
+  }
+
+  @override
+  void didUpdateWidget(PopIn old) {
+    super.didUpdateWidget(old);
+    if (!_started && widget.play) _start();
+  }
+
+  void _start() {
+    _started = true;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+    _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(scale: _scale, child: widget.child);
+}
+
+/// Duration of the badge pop-in.
+const Duration popInDuration = Duration(milliseconds: 150);

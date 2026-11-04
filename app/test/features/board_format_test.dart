@@ -42,10 +42,14 @@ void main() {
       expect(displaySquares(p, const NormalMove(from: Square.b1, to: Square.a1)).to, Square.c1);
     });
 
-    test('Chess960 king that stays on g1: the rook square is used so there is something to draw', () {
+    test('Chess960 king that stays on g1: the king\'s square (the rook\'s origin is empty afterwards)', () {
       final p = _fen('4k3/8/8/8/8/8/8/5RKR w FH - 0 1');
       final d = displaySquares(p, const NormalMove(from: Square.g1, to: Square.h1));
-      expect((d.from, d.to), (Square.g1, Square.h1));
+      expect((d.from, d.to), (Square.g1, Square.g1));
+      // Queenside, king already on c8: the king stays on c8 as well.
+      final q = _fen('r1k5/8/8/8/8/8/8/4K3 b a - 0 1');
+      final e = displaySquares(q, const NormalMove(from: Square.c8, to: Square.a8));
+      expect((e.from, e.to), (Square.c8, Square.c8));
     });
 
     test('ordinary moves and captures of an enemy rook are untouched', () {

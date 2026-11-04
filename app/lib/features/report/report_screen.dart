@@ -11,16 +11,20 @@ import '../board/move_badge.dart';
 /// counts per side, the opening and the eval graph. Tapping the graph returns
 /// the picked ply to the board. The game summary block belongs to M6.
 class ReportScreen extends ConsumerStatefulWidget {
-  const ReportScreen({super.key, this.gameId});
+  const ReportScreen({super.key, this.gameId, this.initialPly = 0});
 
   final int? gameId;
+
+  /// The ply the board shows when the report opens; "Show on board" without
+  /// touching the graph hands it back unchanged.
+  final int initialPly;
 
   @override
   ConsumerState<ReportScreen> createState() => _ReportScreenState();
 }
 
 class _ReportScreenState extends ConsumerState<ReportScreen> {
-  int _ply = 0;
+  late int _ply = widget.initialPly;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +79,7 @@ class ReportCard extends StatelessWidget {
     final theme = Theme.of(context);
     final opening = data.record.openingName ?? data.book.opening?.name;
     final eco = data.record.eco ?? data.book.opening?.eco;
-    final openingText = opening == null ? l10n.reportOpeningUnknown : [?eco, opening].join(' · ');
+    final openingText = opening == null ? l10n.reportOpeningUnknown : eco == null ? opening : l10n.reportOpeningEco(eco, opening);
     return Card(
       key: const Key('report-card'),
       margin: EdgeInsets.zero,

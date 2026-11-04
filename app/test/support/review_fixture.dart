@@ -114,7 +114,8 @@ Future<int> seedReview(
   return id;
 }
 
-/// Pumps the board of [id] in a tall window (the screen scrolls).
+/// Pumps the board of [id] in a tall window (the screen scrolls). The move
+/// list is lazy: pass a large [width] to have every chip built.
 Future<ProviderContainer> pumpReview(
   WidgetTester tester,
   TestEnv env,
@@ -122,8 +123,9 @@ Future<ProviderContainer> pumpReview(
   int initialPly = 0,
   ProviderContainer? container,
   Brightness brightness = Brightness.light,
+  double width = 800,
 }) async {
-  tester.view.physicalSize = const Size(800, 2400);
+  tester.view.physicalSize = Size(width, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   if (container == null) {

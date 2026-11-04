@@ -134,22 +134,30 @@ class Classifier {
       final terminal = detectTerminal(p);
       final last = i == positions.length - 1;
       final drawnByRule = terminal == null && last && (seen >= 3 || p.halfmoves >= 100);
-      double? whiteWin;
-      if (terminal != null) {
-        whiteWin = switch (terminal.winner) {
-          Side.white => WinPercent.mateWin,
-          Side.black => 100 - WinPercent.mateWin,
-          null => 50,
-        };
-      } else if (drawnByRule) {
-        whiteWin = 50;
-      } else {
-        final top = _rank(lines[i], 1);
-        if (top != null) whiteWin = WinPercent.ofWhiteScore(top.score);
-      }
-      out.add(PositionWin(position: p, whiteWin: whiteWin, terminal: terminal, drawnByRule: drawnByRule));
+      out.add(PositionWin(
+        position: p,
+        whiteWin: _whiteWin(terminal, drawnByRule, lines[i]),
+        terminal: terminal,
+        drawnByRule: drawnByRule,
+      ));
     }
     return out;
+  }
+
+  /// The one Win% rule of a position (White POV): the winner's mate score on
+  /// a checkmate, 50 on a stalemate / dead position / final claimable draw,
+  /// else the rank-1 line (null without one).
+  static double? _whiteWin(Terminal? terminal, bool drawnByRule, List<EngineLine>? lines) {
+    if (terminal != null) {
+      return switch (terminal.winner) {
+        Side.white => WinPercent.mateWin,
+        Side.black => 100 - WinPercent.mateWin,
+        null => 50,
+      };
+    }
+    if (drawnByRule) return 50;
+    final top = _rank(lines, 1);
+    return top == null ? null : WinPercent.ofWhiteScore(top.score);
   }
 
   /// One entry per move (index 0 = ply 1). An entry is null when the engine
@@ -344,5 +352,84 @@ class Classifier {
     final normalized = previousPos.normalizeMove(prev) as NormalMove;
     if (!See.isCapture(previousPos, normalized)) return false;
     return normalized.to == played.to;
+  }
+}
+
+/// [Classifier.classify] kept up to date as engine positions arrive, without
+/// redoing the work for the whole game (the analysis board needs a fresh
+/// label set after every position the engine finishes).
+///
+/// The game is replayed once, in the constructor. [setLines] then recomputes
+/// only what depends on the new position `p`: the Win% of `p`, and the labels
+/// of ply `p` (its "after" position) and ply `p + 1` (its "before" position).
+/// A label also reads the previous label (the Miss and Great rules), so the
+/// recomputation goes on past those two plies only while a label really
+/// changed. It is the same code as [Classifier.classify], so after any
+/// sequence of [setLines] calls [moves] equals a from-scratch classification
+/// of the same lines (tested with Book and Miss).
+class IncrementalClassifier {
+  IncrementalClassifier({
+    required this.startFen,
+    required List<String> moves,
+    this.bookPlies = 0,
+    ClassifierConfig config = ClassifierConfig.standard,
+  })  : _uci = List.unmodifiable(moves),
+        _classifier = Classifier(config: config) {
+    _wins = Classifier.positionWins(startFen, _uci, const {});
+    // Book moves are labelled without engine data.
+    _moves = _classifier.classify(startFen: startFen, moves: _uci, lines: const {}, bookPlies: bookPlies);
+  }
+
+  final String startFen;
+  final int bookPlies;
+  final List<String> _uci;
+  final Classifier _classifier;
+  final Map<int, List<EngineLine>> _lines = {};
+  late final List<PositionWin> _wins;
+  late final List<ClassifiedMove?> _moves;
+
+  int get plyCount => _uci.length;
+
+  /// Engine lines per position stored so far (see [setLines]); live.
+  Map<int, List<EngineLine>> get lines => _lines;
+
+  /// Per-position Win% data (`plyCount + 1` entries); live, copy to keep.
+  List<PositionWin> get wins => _wins;
+
+  /// One entry per ply (index 0 = ply 1); live, copy to keep.
+  List<ClassifiedMove?> get moves => _moves;
+
+  /// Stores the engine lines of position [position] (0 = start; an empty list
+  /// for a terminal marker) and updates the Win% and the labels it affects.
+  /// Setting the same lines again changes nothing.
+  void setLines(int position, List<EngineLine> lines) {
+    if (position < 0 || position > plyCount) return;
+    _lines[position] = lines;
+    final w = _wins[position];
+    _wins[position] = PositionWin(
+      position: w.position,
+      whiteWin: Classifier._whiteWin(w.terminal, w.drawnByRule, lines),
+      terminal: w.terminal,
+      drawnByRule: w.drawnByRule,
+    );
+    for (var ply = position < 1 ? 1 : position; ply <= plyCount; ply++) {
+      final old = _moves[ply - 1];
+      final updated = _classifier._classifyMove(
+        ply,
+        _wins,
+        _uci,
+        _lines,
+        bookPlies,
+        ply >= 2 ? _moves[ply - 2] : null,
+      );
+      _moves[ply - 1] = updated;
+      if (ply > position && _sameForSuccessor(old, updated)) break;
+    }
+  }
+
+  /// What the next ply's classification reads from this one.
+  static bool _sameForSuccessor(ClassifiedMove? a, ClassifiedMove? b) {
+    if (a == null || b == null) return a == null && b == null;
+    return a.label == b.label && a.epLoss == b.epLoss && a.winBefore == b.winBefore;
   }
 }

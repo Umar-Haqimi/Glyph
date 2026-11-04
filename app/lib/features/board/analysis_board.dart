@@ -1,18 +1,22 @@
-import 'package:chessground/chessground.dart'
-    show Arrow, ChessboardColorScheme, CustomShape, PieceSet, Shape, StaticChessboard, StaticChessboardSettings;
+import 'package:chessground/chessground.dart' show Arrow, CustomShape, Shape, StaticChessboard, StaticChessboardSettings;
 import 'package:dartchess/dartchess.dart';
 import 'package:glyph_core/glyph_core.dart' show MoveLabel;
 import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
+import 'board_assets.dart';
 import 'move_badge.dart';
 
 /// A badge to draw on a square of the board.
 class BoardBadge {
-  const BoardBadge({required this.square, required this.label});
+  const BoardBadge({required this.square, required this.label, required this.spokenMove});
 
   final Square square;
   final MoveLabel label;
+
+  /// The move the badge belongs to, in words for a screen reader (not part of
+  /// the identity: the same label on the same square is the same badge).
+  final String spokenMove;
 
   @override
   bool operator ==(Object other) => other is BoardBadge && other.square == square && other.label == label;
@@ -74,10 +78,12 @@ class AnalysisBoard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final badge = this.badge;
     final arrow = this.arrow;
+    // The system "remove animations" setting: no glide, no pop-in.
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final shapes = <Shape>{
       if (arrow != null)
         Arrow(color: scheme.primary.withValues(alpha: 0.85), orig: arrow.from, dest: arrow.to),
-      if (badge != null) _badgeShape(context, l10n, badge),
+      if (badge != null) _badgeShape(context, l10n, badge, reduceMotion),
     };
     return Semantics(
       container: true,
@@ -90,16 +96,16 @@ class AnalysisBoard extends StatelessWidget {
         lastMove: lastMove,
         shapes: shapes,
         settings: StaticChessboardSettings(
-          colorScheme: ChessboardColorScheme.brown,
-          pieceAssets: PieceSet.cburnettAssets,
+          colorScheme: defaultBoardColorScheme,
+          pieceAssets: boardPieceAssets,
           enableCoordinates: true,
-          animationDuration: animate ? const Duration(milliseconds: 150) : Duration.zero,
+          animationDuration: animate && !reduceMotion ? const Duration(milliseconds: 150) : Duration.zero,
         ),
       ),
     );
   }
 
-  Shape _badgeShape(BuildContext context, AppLocalizations l10n, BoardBadge badge) {
+  Shape _badgeShape(BuildContext context, AppLocalizations l10n, BoardBadge badge, bool reduceMotion) {
     return CustomShape(
       orig: badge.square,
       child: Align(
@@ -110,11 +116,11 @@ class AnalysisBoard extends StatelessWidget {
           child: TweenAnimationBuilder<double>(
             key: ValueKey(badge),
             tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 150),
+            duration: reduceMotion ? Duration.zero : popInDuration,
             curve: Curves.easeOutBack,
             builder: (context, t, child) => Transform.scale(scale: t.clamp(0.0, 1.2), child: child),
             child: Semantics(
-              label: l10n.boardBadgeOn(labelName(l10n, badge.label), badge.square.name),
+              label: l10n.boardBadgeOn(labelName(l10n, badge.label), badge.spokenMove),
               image: true,
               child: LayoutBuilder(
                 builder: (context, c) => MoveBadge(

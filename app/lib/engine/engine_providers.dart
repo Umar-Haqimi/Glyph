@@ -133,8 +133,15 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
   }
 
   void _onState(AnalysisJobState s) {
+    final previous = state;
     state = s;
     final id = s.gameId;
+    // A job just began for this game (a fresh start throws the old rows away,
+    // a resume flips the stored status to `running`): the stored game record
+    // the board holds is out of date.
+    if (id != null && s is AnalysisRunning && !(previous is AnalysisRunning && previous.gameId == id)) {
+      ref.invalidate(gameProvider(id));
+    }
     if (id != null && s.isFinished) {
       if (s is AnalysisCompleted) {
         // Label the moves and compute accuracy before telling the UI.
@@ -160,12 +167,17 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
 
   bool isQueued(int gameId) => _service.isQueued(gameId);
 
+  /// The game's job is running, paused for the background, or queued.
+  bool isActive(int gameId) => _service.isActive(gameId);
+
   bool wasCancelledWhileQueued(int gameId) => _cancelledWhileQueued.contains(gameId);
 
   /// Starts (or resumes, from the stored `completed_plies`) the analysis of
-  /// [game]. [restart] throws the stored progress away. A game whose stored
-  /// PGN cannot be read ends in `failed(invalidGame)` right away.
-  Future<void> analyse(GameRecord game, {bool restart = false}) async {
+  /// [game]. [restart] throws the stored progress away; [depth] overrides the
+  /// depth of the engine settings for this job ("Re-analyse at depth…"). A
+  /// game whose stored PGN cannot be read ends in `failed(invalidGame)` right
+  /// away.
+  Future<void> analyse(GameRecord game, {bool restart = false, int? depth}) async {
     _cancelledWhileQueued.remove(game.id);
     final AnalysisRequest request;
     try {
@@ -178,7 +190,7 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
       request = AnalysisRequest.fromGame(
         game.id,
         parsed.games.first,
-        depth: settings.depth,
+        depth: depth ?? settings.depth,
         multipv: EngineDefaults.multiPv,
         threads: settings.threads,
         hashMb: settings.hashMb,

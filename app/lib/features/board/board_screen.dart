@@ -10,6 +10,7 @@ import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
 import '../library/library_controller.dart';
+import '../settings/engine_settings.dart';
 import '../report/report_screen.dart';
 import 'analysis_board.dart';
 import 'analysis_progress.dart';
@@ -24,6 +25,7 @@ import 'key_moments_sheet.dart';
 import 'move_badge.dart';
 import 'move_list.dart';
 import 'player_strip.dart';
+import 'spoken_move.dart';
 
 /// Analysis board (SPEC section 4, screen 3): the review experience without
 /// the LLM. View-only in v1; all navigation goes through a [PositionCursor],
@@ -40,7 +42,7 @@ class BoardScreen extends ConsumerStatefulWidget {
   ConsumerState<BoardScreen> createState() => _BoardScreenState();
 }
 
-enum _MenuAction { bestArrow, setSide }
+enum _MenuAction { bestArrow, setSide, reanalyse, delete }
 
 class _BoardScreenState extends ConsumerState<BoardScreen> {
   bool _autoStarted = false;
@@ -55,12 +57,18 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   bool _animate = true;
 
   /// A game that was never analysed starts analysing when its board opens
-  /// (SPEC section 4, import flow). Anything already stored is resumed by hand.
+  /// (SPEC section 4, import flow). Anything already stored is resumed by
+  /// hand. A game that is already queued or running is left alone (starting
+  /// it again would move it to the back of the queue), and so is one whose
+  /// queued job the user cancelled (the progress row offers Resume).
   void _maybeAutoStart(GameRecord? game) {
     if (_autoStarted || game == null || game.analysisStatus != null) return;
     _autoStarted = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(analysisJobProvider.notifier).analyse(game);
+      if (!mounted) return;
+      final jobs = ref.read(analysisJobProvider.notifier);
+      if (jobs.isActive(game.id) || jobs.wasCancelledWhileQueued(game.id)) return;
+      jobs.analyse(game);
     });
   }
 
@@ -89,15 +97,17 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
         title: Text(l10n.boardYourSideTitle),
         children: [
           for (final (side, text) in [(Side.white, l10n.sideWhite), (Side.black, l10n.sideBlack)])
-            SimpleDialogOption(
-              key: Key('your-side-${side.name}'),
+            _ChoiceOption(
+              optionKey: Key('your-side-${side.name}'),
               onPressed: () => Navigator.of(context).pop(side),
-              child: _SideOption(text: text, selected: data.userSide == side),
+              text: text,
+              selected: data.userSide == side,
             ),
-          SimpleDialogOption(
-            key: const Key('your-side-none'),
+          _ChoiceOption(
+            optionKey: const Key('your-side-none'),
             onPressed: () => Navigator.of(context).pop(none),
-            child: _SideOption(text: l10n.boardYourSideNone, selected: data.userSide == null),
+            text: l10n.boardYourSideNone,
+            selected: data.userSide == null,
           ),
         ],
       ),
@@ -112,6 +122,73 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     if (ref.exists(libraryProvider)) ref.read(libraryProvider.notifier).refresh();
   }
 
+  Future<void> _chooseReanalyseDepth(BoardData data) async {
+    final l10n = AppLocalizations.of(context);
+    final current = (await ref.read(engineSettingsProvider.future)).preset;
+    if (!mounted) return;
+    final picked = await showDialog<DepthPreset>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.boardReanalyseTitle),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(l10n.boardReanalyseNote, style: Theme.of(context).textTheme.bodySmall),
+          ),
+          for (final preset in DepthPreset.values)
+            _ChoiceOption(
+              optionKey: Key('reanalyse-${preset.name}'),
+              onPressed: () => Navigator.of(context).pop(preset),
+              text: l10n.boardReanalyseOption(_presetName(l10n, preset), preset.depth),
+              selected: preset == current,
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _autoStarted = true);
+    // The existing restart path: the stored lines, labels and accuracy are
+    // thrown away when the job begins (a running job is cancelled first).
+    await ref.read(analysisJobProvider.notifier).analyse(data.record, restart: true, depth: picked.depth);
+  }
+
+  String _presetName(AppLocalizations l10n, DepthPreset preset) => switch (preset) {
+        DepthPreset.fast => l10n.depthFast,
+        DepthPreset.normal => l10n.depthNormal,
+        DepthPreset.deep => l10n.depthDeep,
+      };
+
+  Future<void> _confirmDelete(BoardData data) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.boardDeleteTitle),
+        content: Text(l10n.boardDeleteBody),
+        actions: [
+          TextButton(
+            key: const Key('delete-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.analysisCancel),
+          ),
+          FilledButton(
+            key: const Key('delete-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.libraryDeleteAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    // The library's delete flow: stops the game's analysis (running or
+    // queued) before the rows go away. Leave the board first so it never
+    // shows a game that no longer exists.
+    final library = ref.read(libraryProvider.notifier);
+    final id = data.record.id;
+    Navigator.of(context).maybePop();
+    await library.deleteNow(id);
+  }
+
   Future<void> _openKeyMoments(BoardData data) async {
     final ply = await showKeyMomentsSheet(context, data);
     if (ply != null) _goTo(ply);
@@ -123,7 +200,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     final ply = await Navigator.of(context).push<int>(
       MaterialPageRoute<int>(
         settings: RouteSettings(name: Routes.report, arguments: data.record.id),
-        builder: (_) => ReportScreen(gameId: data.record.id),
+        builder: (_) => ReportScreen(gameId: data.record.id, initialPly: _cursor?.ply ?? 0),
       ),
     );
     if (ply != null) _goTo(ply);
@@ -183,6 +260,10 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                     setState(() => _showArrow = !_showArrow);
                   case _MenuAction.setSide:
                     _chooseSide(data);
+                  case _MenuAction.reanalyse:
+                    _chooseReanalyseDepth(data);
+                  case _MenuAction.delete:
+                    _confirmDelete(data);
                 }
               },
               itemBuilder: (context) => [
@@ -196,6 +277,16 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                   key: const Key('menu-set-side'),
                   value: _MenuAction.setSide,
                   child: Text(l10n.boardSetYourSide),
+                ),
+                PopupMenuItem(
+                  key: const Key('menu-reanalyse'),
+                  value: _MenuAction.reanalyse,
+                  child: Text(l10n.boardMenuReanalyse),
+                ),
+                PopupMenuItem(
+                  key: const Key('menu-delete'),
+                  value: _MenuAction.delete,
+                  child: Text(l10n.boardMenuDelete),
                 ),
               ],
             ),
@@ -229,14 +320,15 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     if (move is NormalMove) {
       final before = data.positionBefore(ply);
       lastMove = displayMove(before, move);
-      moveText = formatMove(before, data.game.plies[ply - 1].san);
+      // Words for the screen reader ("Move 12, White: Knight f3"), not SAN.
+      moveText = spokenMove(l10n, before, data.game.plies[ply - 1].san);
       final label = data.moveAt(ply)?.label;
-      if (label != null) badge = BoardBadge(square: lastMove.to, label: label);
+      if (label != null) badge = BoardBadge(square: lastMove.to, label: label, spokenMove: moveText);
     }
 
     // The engine's best move in the shown position.
     BoardArrow? arrow;
-    if (_showArrow && data.terminalAt(ply) == null) {
+    if (_showArrow && !data.gameOverAt(ply)) {
       final top = data.topLineAt(ply);
       final best = top == null || top.pv.isEmpty ? null : legalUci(position, top.pv.first);
       if (best != null) {
@@ -259,7 +351,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
           elo: side == Side.white ? data.record.whiteElo : data.record.blackElo,
           clockMs: clockAt(data.game, side, ply),
           isUser: data.userSide == side,
-          toMove: position.turn == side && data.terminalAt(ply) == null,
+          toMove: position.turn == side && !data.gameOverAt(ply),
         );
 
     return CallbackShortcuts(
@@ -401,20 +493,32 @@ class _Message extends StatelessWidget {
       );
 }
 
-class _SideOption extends StatelessWidget {
-  const _SideOption({required this.text, required this.selected});
+/// One choice of a dialog list: a button that is also a radio option for a
+/// screen reader (checked + mutually exclusive group), with a visible tick.
+class _ChoiceOption extends StatelessWidget {
+  const _ChoiceOption({required this.optionKey, required this.onPressed, required this.text, required this.selected});
 
+  final Key optionKey;
+  final VoidCallback onPressed;
   final String text;
   final bool selected;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Row(
-          children: [
-            Expanded(child: Text(text)),
-            if (selected) const Icon(Icons.check),
-          ],
+  Widget build(BuildContext context) => Semantics(
+        inMutuallyExclusiveGroup: true,
+        checked: selected,
+        child: SimpleDialogOption(
+          key: optionKey,
+          onPressed: onPressed,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              children: [
+                Expanded(child: Text(text)),
+                if (selected) const ExcludeSemantics(child: Icon(Icons.check)),
+              ],
+            ),
+          ),
         ),
       );
 }

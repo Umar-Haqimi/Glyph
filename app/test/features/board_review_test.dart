@@ -160,7 +160,7 @@ void main() {
     testWidgets('numbers White moves 4. and Black moves 4…, and shows the badges', (tester) async {
       final env = TestEnv();
       final id = await seedReview(env);
-      await pumpReview(tester, env, id);
+      await pumpReview(tester, env, id, width: 2400);
       expect(find.text('4. O-O'), findsOneWidget);
       expect(find.text('4… Nf6'), findsOneWidget);
       expect(_chipBadge(tester, 1), MoveLabel.best);
@@ -211,8 +211,12 @@ void main() {
       final env = TestEnv();
       final id = await seedReview(env);
       await pumpReview(tester, env, id, initialPly: 6);
-      expect(find.bySemanticsLabel('Blunder on c5'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('^Board\\. Position after 3… Bc5, Blunder\\. White at the bottom\\.\$')), findsOneWidget);
+      // Words, not SAN: piece, square and who moved.
+      expect(find.bySemanticsLabel('Blunder: Move 3, Black: Bishop c5'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('^Board\\. Position after Move 3, Black: Bishop c5, Blunder\\. White at the bottom\\.\$')),
+        findsOneWidget,
+      );
       handle.dispose();
     });
 
@@ -494,7 +498,8 @@ void main() {
         expect(find.byKey(Key('key-moment-$ply')), findsNothing, reason: 'ply $ply');
       }
       expect(find.text('White Alice'), findsOneWidget);
-      expect(find.text('Black Bob (${l10n.playerYou})'), findsOneWidget);
+      expect(find.text(l10n.keyMomentsHeaderYou(l10n.sideBlack, 'Bob')), findsOneWidget);
+      expect(find.text('Black Bob (you)'), findsOneWidget);
       expect(find.text('4. O-O'), findsWidgets);
 
       await tester.tap(find.byKey(const Key('key-moment-6')));
@@ -609,7 +614,7 @@ void main() {
       final id = await seedReview(env);
       await pumpReview(tester, env, id, initialPly: 3);
       final node = tester.getSemantics(find.byKey(const Key('eval-graph')).first);
-      expect(node.value, l10n.evalGraphValue(3, 8));
+      expect(node.value, l10n.evalGraphValue(2, l10n.sideWhite));
       handle.dispose();
     });
   });
@@ -660,10 +665,10 @@ void main() {
       final env = TestEnv();
       final id = await seedReview(env, userSide: Side.white);
       await pumpReview(tester, env, id, initialPly: 5);
-      expect(find.bySemanticsLabel('3. Bc4, Mistake'), findsOneWidget);
-      expect(find.bySemanticsLabel('3\u2026 Bc5, Blunder'), findsOneWidget);
+      expect(find.bySemanticsLabel('Move 3, White: Bishop c4, Mistake'), findsOneWidget);
+      expect(find.bySemanticsLabel('Move 3, Black: Bishop c5, Blunder'), findsOneWidget);
       expect(find.bySemanticsLabel('White, Alice, You, rated 1500, clock 4:40'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp(r'^3\. Bc4 \u00b7 Mistake\. Best was Bb5')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Move 3, White: Bishop c4 \u00b7 Mistake\. Best was Bb5')), findsOneWidget);
       for (final tip in [l10n.boardNextMove, l10n.boardPreviousMove, l10n.boardFirstMove, l10n.boardLastMove, l10n.boardKeyMoments, l10n.boardReport, l10n.boardFlip]) {
         expect(find.byTooltip(tip), findsOneWidget, reason: tip);
       }
@@ -675,7 +680,7 @@ void main() {
     testWidgets('navigation, menu and chips are at least 48 dp', (tester) async {
       final env = TestEnv();
       final id = await seedReview(env);
-      await pumpReview(tester, env, id, initialPly: 3);
+      await pumpReview(tester, env, id, initialPly: 3, width: 2400);
       for (final key in ['nav-first', 'nav-back', 'nav-next', 'nav-last', 'open-key-moments', 'open-report', 'flip-board', 'board-menu', 'engine-lines-toggle']) {
         final size = tester.getSize(find.byKey(Key(key)));
         expect(size.width, greaterThanOrEqualTo(48), reason: key);
@@ -705,7 +710,7 @@ void main() {
         importedAt: 1,
       ));
       final id = saved.id;
-      final container = await pumpReview(tester, env, id);
+      final container = await pumpReview(tester, env, id, width: 2400);
 
       // Analysis started by itself and is held at 3 of 9 positions.
       expect(find.text(l10n.analysisRunning(3, 9)), findsOneWidget);

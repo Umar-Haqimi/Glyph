@@ -23,11 +23,15 @@ class CoachCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final label = line.label;
-    final title = [
-      ?line.moveText,
-      if (label != null) labelName(l10n, label),
-    ].join(' · ');
-    final shownTitle = title.isEmpty ? l10n.coachTitleStart : title;
+    final moveText = line.moveText;
+    final name = label == null ? null : labelName(l10n, label);
+    final shownTitle = moveText == null
+        ? (name ?? l10n.coachTitleStart)
+        : (name == null ? moveText : l10n.coachCardTitle(moveText, name));
+    final spokenMove = line.spokenMoveText;
+    final spokenTitle = spokenMove == null
+        ? shownTitle
+        : (name == null ? spokenMove : l10n.coachCardTitle(spokenMove, name));
     final emphasised = label != null && explainEmphasised.contains(label);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -43,7 +47,7 @@ class CoachCard extends StatelessWidget {
             children: [
               Semantics(
                 container: true,
-                label: l10n.coachSemantics(shownTitle, line.text),
+                label: l10n.coachSemantics(spokenTitle, line.text),
                 child: ExcludeSemantics(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

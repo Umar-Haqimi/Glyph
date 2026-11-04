@@ -1,5 +1,8 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glyph/data/in_memory.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/data/providers.dart';
 import 'package:glyph/features/board/board_data.dart';
 import 'package:glyph/features/board/coach.dart';
 import 'package:glyph_core/glyph_core.dart';
@@ -8,6 +11,20 @@ import '../support/review_fixture.dart';
 import '../support/test_app.dart';
 
 final Game _game = parsePgn(reviewPgn).games.single;
+
+/// Remembers how much each `positionLines` call read.
+class _CountingAnalyses extends InMemoryAnalysisRepository {
+  _CountingAnalyses(super.store);
+
+  final List<({int fromPly, int rows})> reads = [];
+
+  @override
+  Future<List<PositionLineRecord>> positionLines(int gameId, {int fromPly = 0}) async {
+    final out = await super.positionLines(gameId, fromPly: fromPly);
+    reads.add((fromPly: fromPly, rows: out.length));
+    return out;
+  }
+}
 
 GameRecord _record({AnalysisStatus? status, Side? userSide}) => GameRecord(
       id: 1,
@@ -166,6 +183,234 @@ void main() {
       );
       expect(data.terminalAt(4)?.kind, TerminalKind.checkmate);
       expect(data.whiteWinAt(4), lessThan(5));
+    });
+  });
+
+  group('BoardDataBuilder (incremental)', () {
+    // A fixture with a Book prefix (the real opening book) and a Miss at ply 5:
+    // White had mate in 3 in position 4 and played Bc4 (engine line 2, no mate).
+    List<PositionLineRecord> rows(int positions) => [
+          for (final r in _rows(positions))
+            if (r.ply == 4 && r.rank == 1)
+              PositionLineRecord(gameId: 1, ply: 4, rank: 1, scoreMate: 3, depth: 16, pvUci: r.pvUci)
+            else
+              r,
+        ];
+
+    void expectSame(BoardData a, BoardData b, String reason) {
+      expect(a.provisional, b.provisional, reason: reason);
+      for (var i = 0; i < a.plyCount; i++) {
+        final x = a.moves[i];
+        final y = b.moves[i];
+        expect(x == null, y == null, reason: '$reason ply ${i + 1}');
+        if (x == null || y == null) continue;
+        expect((x.label, x.epLoss, x.winBefore, x.winAfter, x.bestUci), (y.label, y.epLoss, y.winBefore, y.winAfter, y.bestUci),
+            reason: '$reason ply ${i + 1}');
+      }
+      expect([for (var p = 0; p <= a.plyCount; p++) a.whiteWinAt(p)], [for (var p = 0; p <= b.plyCount; p++) b.whiteWinAt(p)], reason: reason);
+      expect(a.lines.keys.toList(), b.lines.keys.toList(), reason: reason);
+      expect([for (final k in a.keyMoments) k.ply], [for (final k in b.keyMoments) k.ply], reason: reason);
+    }
+
+    test('feeding one position at a time gives, at every prefix, exactly the from-scratch result', () {
+      final seen = <MoveLabel>{};
+      final all = rows(9);
+      // With the real opening book the whole game is theory (Book labels,
+      // no engine data needed); without it the Miss at ply 5 shows up.
+      final realOne = realBook();
+      expect(realOne.annotate(_game).bookPlies, greaterThan(0), reason: 'the fixture starts with theory');
+      for (final book in <OpeningBook?>[realOne, null]) {
+        final builder = BoardDataBuilder(game: _game, book: book);
+        for (var k = 1; k <= 9; k++) {
+          // What the provider does: only the rows from the last known position on.
+          expect(builder.append([for (final r in all) if (r.ply < k && r.ply >= builder.nextPly) r]), isTrue);
+          final scratch = BoardData.build(
+            record: _record(status: AnalysisStatus.running),
+            game: _game,
+            rows: [for (final r in all) if (r.ply < k) r],
+            storedLabels: const [],
+            book: book,
+          );
+          final inc = builder.snapshot(record: _record(status: AnalysisStatus.running), storedLabels: const []);
+          expectSame(inc, scratch, 'book=${book != null}, after $k positions');
+          seen.addAll([for (final m in inc.moves) ?m?.label]);
+        }
+      }
+      expect(seen, containsAll([MoveLabel.book, MoveLabel.miss]), reason: '$seen');
+    });
+
+    test('a snapshot does not change when more rows arrive', () {
+      final builder = BoardDataBuilder(game: _game);
+      final all = rows(9);
+      builder.append([for (final r in all) if (r.ply < 3) r]);
+      final early = builder.snapshot(record: _record(status: AnalysisStatus.running), storedLabels: const []);
+      final labelled = early.moves.where((m) => m != null).length;
+      builder.append([for (final r in all) if (r.ply >= builder.nextPly) r]);
+      expect(early.moves.where((m) => m != null).length, labelled);
+      expect(early.lines.keys, [0, 1, 2]);
+      expect(early.whiteWinAt(5), isNull);
+    });
+
+    test('a restarted analysis is detected (the position it re-reads is missing or different)', () {
+      final all = rows(9);
+      final builder = BoardDataBuilder(game: _game)..append([for (final r in all) if (r.ply < 6) r]);
+      expect(builder.nextPly, 5);
+      // Same position again: fine, nothing changes.
+      expect(builder.append([for (final r in all) if (r.ply >= 5 && r.ply < 7) r]), isTrue);
+      expect(builder.nextPly, 6);
+      // Cleared: the tail is gone.
+      expect(builder.append(const []), isFalse);
+      // Re-analysed at another depth: same position, other numbers.
+      expect(
+        builder.append([
+          PositionLineRecord(gameId: 1, ply: 6, rank: 1, scoreCp: 99, depth: 20, pvUci: 'g8f6 d2d3'),
+        ]),
+        isFalse,
+      );
+      expect(builder.nextPly, 6, reason: 'a rejected append changes nothing');
+    });
+
+    test('the game is replayed once: the builder owns the positions the snapshots share', () {
+      final builder = BoardDataBuilder(game: _game)..append(rows(9));
+      final a = builder.snapshot(record: _record(status: AnalysisStatus.running), storedLabels: const []);
+      final b = builder.snapshot(record: _record(status: AnalysisStatus.running), storedLabels: const []);
+      for (var p = 0; p <= 8; p++) {
+        expect(identical(a.positionAt(p), b.positionAt(p)), isTrue, reason: 'position $p');
+      }
+    });
+
+    test('final-position draws: threefold repetition and the 50-move rule end the game, only at the last position', () {
+      final shuffle = parsePgn('[White "a"]\n[Black "b"]\n\n1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 *').games.single;
+      final d = BoardData.build(record: _record(), game: shuffle, rows: const [], storedLabels: const []);
+      expect([for (var p = 0; p <= 8; p++) d.gameOverAt(p)], [false, false, false, false, false, false, false, false, true]);
+      expect(d.drawnByRuleAt(8), isTrue);
+      expect(d.terminalAt(8), isNull);
+      expect(d.whiteWinAt(8), 50);
+      final fifty = parsePgn(
+        '[White "a"]\n[Black "b"]\n[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 98 80"]\n\n80. Ra2 Kd7 *',
+      ).games.single;
+      final f = BoardData.build(record: _record(), game: fifty, rows: const [], storedLabels: const []);
+      expect([f.gameOverAt(0), f.gameOverAt(1), f.gameOverAt(2)], [false, false, true]);
+      // Checkmate is still game over.
+      final mate = parsePgn('[White "a"]\n[Black "b"]\n\n1. f3 e5 2. g4 Qh4# 0-1').games.single;
+      final m = BoardData.build(record: _record(), game: mate, rows: const [], storedLabels: const []);
+      expect(m.gameOverAt(4), isTrue);
+      expect(m.gameOverAt(3), isFalse);
+    });
+  });
+
+  group('boardDataProvider reads only the new rows', () {
+    setUpAll(TestWidgetsFlutterBinding.ensureInitialized);
+
+    Future<void> savePosition(TestEnv env, int id, int ply) => env.analyses.savePosition(
+          id,
+          ply,
+          [
+            for (final r in _rows(9))
+              if (r.ply == ply) PositionLineRecord(gameId: id, ply: ply, rank: r.rank, scoreCp: r.scoreCp, depth: 16, pvUci: r.pvUci),
+          ],
+          completedPlies: ply + 1,
+          updatedAt: 2 + ply,
+        );
+
+    test('each new position costs a read of the tail, not of the game; the result matches a full build', () async {
+      late _CountingAnalyses counting;
+      final env = TestEnv(analysesBuilder: (store) => counting = _CountingAnalyses(store));
+      final id = (await env.games.save(NewGame(
+        source: GameSource.paste,
+        pgn: reviewPgn,
+        white: 'Alice',
+        black: 'Bob',
+        plyCount: 8,
+        importedAt: 1,
+      )))
+          .id;
+      await env.analyses.upsert(AnalysisRecord(
+        gameId: id,
+        engine: 'Stockfish',
+        depth: 16,
+        multipv: 2,
+        status: AnalysisStatus.running,
+        updatedAt: 1,
+      ));
+      final container = ProviderContainer(overrides: env.overrides);
+      addTearDown(container.dispose);
+      container.listen(boardDataProvider(id), (_, _) {});
+
+      for (var ply = 0; ply <= 8; ply++) {
+        await savePosition(env, id, ply);
+        container.invalidate(gameProvider(id)); // what a new tick does to the provider
+        final data = (await container.read(boardDataProvider(id).future))!;
+        expect(data.analysedPositions, ply + 1);
+      }
+      // Position p is read when it is new and once more (to notice a restart) with the next one: never the whole game.
+      expect([for (final r in counting.reads) r.fromPly], [0, 0, 1, 2, 3, 4, 5, 6, 7], reason: '${counting.reads}');
+      expect(counting.reads.every((r) => r.rows <= 4), isTrue, reason: '${counting.reads}');
+
+      final incremental = (await container.read(boardDataProvider(id).future))!;
+      final scratch = BoardData.build(
+        record: incremental.record,
+        game: _game,
+        rows: await env.analyses.positionLines(id),
+        storedLabels: const [],
+      );
+      expect([for (final m in incremental.moves) m?.label], [for (final m in scratch.moves) m?.label]);
+      expect(incremental.lines.length, scratch.lines.length);
+    });
+
+    test('a cleared and restarted analysis is read from the start again', () async {
+      late _CountingAnalyses counting;
+      final env = TestEnv(analysesBuilder: (store) => counting = _CountingAnalyses(store));
+      final id = (await env.games.save(NewGame(
+        source: GameSource.paste,
+        pgn: reviewPgn,
+        white: 'Alice',
+        black: 'Bob',
+        plyCount: 8,
+        importedAt: 1,
+      )))
+          .id;
+      await env.analyses.upsert(AnalysisRecord(
+        gameId: id,
+        engine: 'Stockfish',
+        depth: 16,
+        multipv: 2,
+        status: AnalysisStatus.running,
+        updatedAt: 1,
+      ));
+      final container = ProviderContainer(overrides: env.overrides);
+      addTearDown(container.dispose);
+      container.listen(boardDataProvider(id), (_, _) {});
+      for (var ply = 0; ply <= 5; ply++) {
+        await savePosition(env, id, ply);
+      }
+      expect((await container.read(boardDataProvider(id).future))!.analysedPositions, 6);
+
+      // Re-analyse: everything is cleared, two positions come in at another depth.
+      await env.analyses.clear(id);
+      await env.analyses.upsert(AnalysisRecord(
+        gameId: id,
+        engine: 'Stockfish',
+        depth: 20,
+        multipv: 2,
+        status: AnalysisStatus.running,
+        updatedAt: 9,
+      ));
+      for (var ply = 0; ply < 2; ply++) {
+        await env.analyses.savePosition(
+          id,
+          ply,
+          [PositionLineRecord(gameId: id, ply: ply, rank: 1, scoreCp: -500, depth: 20, pvUci: _rows(9).firstWhere((r) => r.ply == ply).pvUci)],
+          completedPlies: ply + 1,
+          updatedAt: 10 + ply,
+        );
+      }
+      container.invalidate(gameProvider(id));
+      final data = (await container.read(boardDataProvider(id).future))!;
+      expect(data.analysedPositions, 2, reason: 'the stale positions 2..5 are gone');
+      expect(data.topLineAt(0)!.depth, 20);
+      expect(data.whiteWinAt(0)!, lessThan(50));
+      expect(counting.reads.last.fromPly, 0, reason: 'the fallback re-read everything');
     });
   });
 

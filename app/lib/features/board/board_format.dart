@@ -27,16 +27,19 @@ String formatCp(int cp) {
 
 /// A move as it is *drawn*: castling in dartchess is king-takes-rook
 /// (`e1h1`), the board shows the king landing on the g or c file (the
-/// lichess mobile `altCastles` rule, docs/DECISIONS.md M0 section 2.2). When
-/// the king does not move at all (Chess960, king already on g1) the rook's
-/// square is used so there is still something to highlight or point at.
+/// lichess mobile `altCastles` rule, docs/DECISIONS.md M0 section 2.2).
+///
+/// Chess960 castling where the king does not move (king already on its
+/// landing file, only the rook hops over): `from == to == the king's
+/// square`. The badge and the highlight belong on the king (it is the piece
+/// that "castles"; the rook's origin square is empty afterwards), and there is
+/// no arrow to draw (callers skip an arrow whose ends coincide).
 ({Square from, Square to}) displaySquares(Position position, NormalMove move) {
   final piece = position.board.pieceAt(move.from);
   final target = position.board.pieceAt(move.to);
   if (piece != null && piece.role == Role.king && target != null && target.color == piece.color && target.role == Role.rook) {
     final file = move.to > move.from ? File.g : File.c;
-    final dest = Square.fromCoords(file, move.from.rank);
-    return (from: move.from, to: dest == move.from ? move.to : dest);
+    return (from: move.from, to: Square.fromCoords(file, move.from.rank));
   }
   return (from: move.from, to: move.to);
 }

@@ -193,10 +193,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?)''');
   }
 
   @override
-  Future<List<PositionLineRecord>> positionLines(int gameId) async => [
+  Future<List<PositionLineRecord>> positionLines(int gameId, {int fromPly = 0}) async => [
         for (final r in _db.raw.select(
-          'SELECT * FROM position_lines WHERE game_id = ? ORDER BY ply, rank',
-          [gameId],
+          'SELECT * FROM position_lines WHERE game_id = ? AND ply >= ? ORDER BY ply, rank',
+          [gameId, fromPly],
         ))
           PositionLineRecord(
             gameId: gameId,

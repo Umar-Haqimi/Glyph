@@ -53,6 +53,19 @@ class LibraryController extends AsyncNotifier<List<GameRecord>> {
 
   Future<void> commitDelete(int id) async {
     if (!_pendingDelete.remove(id)) return;
+    await _deleteForGood(id);
+  }
+
+  /// Deletes [id] at once (the board's "Delete game", after its own
+  /// confirmation): the same steps as an undo window that closes.
+  Future<void> deleteNow(int id) async {
+    await future; // the list is loaded, so the state below is a real list
+    _pendingDelete.remove(id);
+    await _deleteForGood(id);
+    state = AsyncData(_visible());
+  }
+
+  Future<void> _deleteForGood(int id) async {
     // Stop its analysis (running or queued) before the rows go away; the
     // pipeline also copes if a write still races the delete.
     await _engine.cancel(id);

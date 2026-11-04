@@ -42,8 +42,10 @@ abstract interface class AnalysisRepository {
     required int updatedAt,
   });
 
-  /// All lines of a game ordered by (ply, rank).
-  Future<List<PositionLineRecord>> positionLines(int gameId);
+  /// The lines of a game ordered by (ply, rank), from position [fromPly] on
+  /// (0 = all). The analysis board re-reads only the tail after each new
+  /// position instead of the whole game.
+  Future<List<PositionLineRecord>> positionLines(int gameId, {int fromPly = 0});
 
   Future<void> putLabels(int gameId, List<MoveLabelRecord> labels);
 

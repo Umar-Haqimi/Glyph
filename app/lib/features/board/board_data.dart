@@ -30,7 +30,9 @@ class BoardData {
     required this.provisional,
   }) : keyMoments = KeyMoments.of(moves);
 
-  /// Builds the data from the stored rows. Pure; the provider only loads.
+  /// Builds the data from all stored rows at once (tests and one-off
+  /// callers). The provider keeps a [BoardDataBuilder] per game instead and
+  /// only feeds it the new rows.
   factory BoardData.build({
     required GameRecord record,
     required Game game,
@@ -38,58 +40,8 @@ class BoardData {
     required List<MoveLabelRecord> storedLabels,
     OpeningBook? book,
   }) {
-    final lines = <int, List<EngineLine>>{};
-    for (final row in rows) {
-      final line = engineLineFromStored(
-        rank: row.rank,
-        scoreCp: row.scoreCp,
-        scoreMate: row.scoreMate,
-        depth: row.depth,
-        pvUci: row.pvUci,
-      );
-      (lines[row.ply] ??= []).addAll([?line]);
-    }
-    final uci = [for (final p in game.plies) p.uci];
-    final wins = Classifier.positionWins(game.startFen, uci, lines);
-    final annotation = book?.annotate(game) ?? BookAnnotation.none;
-
-    final useStored = record.analysisStatus == AnalysisStatus.completed && storedLabels.length >= game.plyCount;
-    final List<ClassifiedMove?> moves;
-    if (useStored) {
-      final byPly = {for (final l in storedLabels) l.ply: l};
-      moves = [
-        for (var ply = 1; ply <= game.plyCount; ply++)
-          if (byPly[ply] case final l?)
-            ClassifiedMove(
-              ply: ply,
-              side: wins[ply - 1].position.turn,
-              uci: game.plies[ply - 1].uci,
-              label: l.label,
-              epLoss: l.epLoss,
-              winBefore: l.winBefore,
-              winAfter: l.winAfter,
-              bestUci: l.bestUci,
-            )
-          else
-            null,
-      ];
-    } else {
-      moves = const Classifier().classify(
-        startFen: game.startFen,
-        moves: uci,
-        lines: lines,
-        bookPlies: annotation.bookPlies,
-      );
-    }
-    return BoardData._(
-      record: record,
-      game: game,
-      lines: lines,
-      wins: wins,
-      moves: moves,
-      book: annotation,
-      provisional: !useStored,
-    );
+    final builder = BoardDataBuilder(game: game, book: book)..append(rows);
+    return builder.snapshot(record: record, storedLabels: storedLabels);
   }
 
   final GameRecord record;
@@ -142,6 +94,16 @@ class BoardData {
   /// material), whether or not the engine has reached it.
   Terminal? terminalAt(int ply) => wins[ply.clamp(0, plyCount)].terminal;
 
+  /// The game ended in position [ply] by threefold repetition or the 50-move
+  /// rule (only ever the **last** position of the game, like the classifier
+  /// treats it: a claimable draw in the middle of a game was not claimed).
+  bool drawnByRuleAt(int ply) => wins[ply.clamp(0, plyCount)].drawnByRule;
+
+  /// The game is over in position [ply]: checkmate, stalemate, insufficient
+  /// material, or the final-position draw by rule. Drives the result text,
+  /// the missing best-move arrow and the missing to-move highlight.
+  bool gameOverAt(int ply) => terminalAt(ply) != null || drawnByRuleAt(ply);
+
   /// White's Win% in position [ply], null when it is not known yet.
   double? whiteWinAt(int ply) => wins[ply.clamp(0, plyCount)].whiteWin;
 
@@ -169,6 +131,119 @@ class BoardData {
   Side? get userSide => record.userSide;
 }
 
+/// Accumulates the engine lines of one game and keeps the labels and the
+/// Win% series current, so that a new analysed position costs a few
+/// classifications instead of a full re-read and re-classification
+/// (measured: docs/PROGRESS.md M5). The game is replayed once (when the
+/// builder is made); [append] feeds rows, [snapshot] freezes the result.
+class BoardDataBuilder {
+  BoardDataBuilder({required this.game, OpeningBook? book})
+      : annotation = book?.annotate(game) ?? BookAnnotation.none {
+    _classifier = IncrementalClassifier(
+      startFen: game.startFen,
+      moves: [for (final p in game.plies) p.uci],
+      bookPlies: annotation.bookPlies,
+    );
+  }
+
+  final Game game;
+  final BookAnnotation annotation;
+  late final IncrementalClassifier _classifier;
+  int _tail = -1;
+
+  /// The first position whose rows the next [append] needs: the highest one
+  /// seen (it is read again to detect a restarted analysis), 0 at the start.
+  int get nextPly => _tail < 0 ? 0 : _tail;
+
+  /// Feeds the rows from [nextPly] on (what `positionLines(fromPly:)`
+  /// returns, ordered by ply). Returns false, changing nothing, when they do
+  /// not continue what was stored before: the re-read position differs or has
+  /// vanished, i.e. the analysis was cleared and restarted. The caller then
+  /// starts a new builder with all rows.
+  bool append(List<PositionLineRecord> rows) {
+    final byPly = <int, List<EngineLine>>{};
+    for (final row in rows) {
+      final line = engineLineFromStored(
+        rank: row.rank,
+        scoreCp: row.scoreCp,
+        scoreMate: row.scoreMate,
+        depth: row.depth,
+        pvUci: row.pvUci,
+      );
+      (byPly[row.ply] ??= []).addAll([?line]);
+    }
+    if (_tail >= 0) {
+      final known = _classifier.lines[_tail];
+      final again = byPly[_tail];
+      if (known == null || again == null || !_sameLines(known, again)) return false;
+    }
+    for (final MapEntry(key: ply, value: lines) in byPly.entries) {
+      if (ply < _tail) continue; // not asked for; never rewrite older positions
+      if (ply == _tail) continue; // verified above, unchanged
+      _classifier.setLines(ply, lines);
+      if (ply > _tail) _tail = ply;
+    }
+    return true;
+  }
+
+  static bool _sameLines(List<EngineLine> a, List<EngineLine> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (x.rank != y.rank || x.depth != y.depth || x.score != y.score || x.pv.join(' ') != y.pv.join(' ')) return false;
+    }
+    return true;
+  }
+
+  /// An immutable view of the current state ([storedLabels]: the persisted
+  /// labels of a completed analysis, else empty).
+  BoardData snapshot({required GameRecord record, required List<MoveLabelRecord> storedLabels}) {
+    final wins = List<PositionWin>.of(_classifier.wins);
+    final useStored = record.analysisStatus == AnalysisStatus.completed && storedLabels.length >= game.plyCount;
+    final List<ClassifiedMove?> moves;
+    if (useStored) {
+      final byPly = {for (final l in storedLabels) l.ply: l};
+      moves = [
+        for (var ply = 1; ply <= game.plyCount; ply++)
+          if (byPly[ply] case final l?)
+            ClassifiedMove(
+              ply: ply,
+              side: wins[ply - 1].position.turn,
+              uci: game.plies[ply - 1].uci,
+              label: l.label,
+              epLoss: l.epLoss,
+              winBefore: l.winBefore,
+              winAfter: l.winAfter,
+              bestUci: l.bestUci,
+            )
+          else
+            null,
+      ];
+    } else {
+      moves = List<ClassifiedMove?>.of(_classifier.moves);
+    }
+    return BoardData._(
+      record: record,
+      game: game,
+      lines: Map.of(_classifier.lines),
+      wins: wins,
+      moves: moves,
+      book: annotation,
+      provisional: !useStored,
+    );
+  }
+}
+
+/// The per-game [BoardDataBuilder], kept between rebuilds of
+/// [boardDataProvider] (a plain mutable holder: it must outlive the provider
+/// function's re-runs, and it depends on nothing).
+class BoardBuilderCache {
+  BoardDataBuilder? builder;
+}
+
+final boardBuilderCacheProvider = Provider.autoDispose.family<BoardBuilderCache, int>((ref, id) => BoardBuilderCache());
+
 /// The parsed game for the board. Parsed once per game (the PGN of a stored
 /// game never changes); null when it cannot be read.
 final parsedGameProvider = FutureProvider.autoDispose.family<Game?, int>((ref, id) async {
@@ -179,22 +254,36 @@ final parsedGameProvider = FutureProvider.autoDispose.family<Game?, int>((ref, i
 });
 
 /// [BoardData] of game [id], rebuilt when the stored game changes and after
-/// every position the running analysis finishes (progressive badges).
+/// every position the running analysis finishes (progressive badges). Only
+/// the rows from the last known position on are read, and only the labels
+/// that depend on them are recomputed ([IncrementalClassifier]).
 final boardDataProvider = FutureProvider.autoDispose.family<BoardData?, int>((ref, id) async {
   // One tick per persisted position of this game's job: the pipeline writes a
   // position before it reports it, so a reload sees at least that many.
   ref.watch(analysisJobProvider.select((s) => s.gameId == id ? (s.runtimeType, s.completed) : null));
+  final cache = ref.watch(boardBuilderCacheProvider(id));
   final record = await ref.watch(gameProvider(id).future);
   final game = await ref.watch(parsedGameProvider(id).future);
   if (record == null || game == null) return null;
   final analyses = ref.watch(analysisRepositoryProvider);
-  final rows = await analyses.positionLines(id);
-  final labels = record.analysisStatus == AnalysisStatus.completed ? await analyses.labels(id) : const <MoveLabelRecord>[];
   OpeningBook? book;
   try {
     book = await ref.watch(openingBookProvider.future);
   } catch (_) {
     book = null;
   }
-  return BoardData.build(record: record, game: game, rows: rows, storedLabels: labels, book: book);
+  var builder = cache.builder;
+  if (builder == null || !identical(builder.game, game)) {
+    builder = BoardDataBuilder(game: game, book: book);
+  }
+  var rows = await analyses.positionLines(id, fromPly: builder.nextPly);
+  if (!builder.append(rows)) {
+    // The analysis was cleared and restarted since the last read.
+    builder = BoardDataBuilder(game: game, book: book);
+    rows = await analyses.positionLines(id);
+    builder.append(rows);
+  }
+  cache.builder = builder;
+  final labels = record.analysisStatus == AnalysisStatus.completed ? await analyses.labels(id) : const <MoveLabelRecord>[];
+  return builder.snapshot(record: record, storedLabels: labels);
 });

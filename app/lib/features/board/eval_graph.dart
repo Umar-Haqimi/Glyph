@@ -24,6 +24,14 @@ class EvalGraph extends StatelessWidget {
   final ValueChanged<int> onSelect;
   final double height;
 
+  /// What the slider announces for position [p]: the full move number and who
+  /// moved ("Move 12, Black"), not the half-move count.
+  String _valueAt(AppLocalizations l10n, int p) {
+    if (p <= 0) return l10n.evalGraphValueStart;
+    final before = data.positionBefore(p);
+    return l10n.evalGraphValue(before.fullmoves, before.turn == Side.white ? l10n.sideWhite : l10n.sideBlack);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -34,9 +42,9 @@ class EvalGraph extends StatelessWidget {
       container: true,
       slider: true,
       label: l10n.evalGraphSemantics,
-      value: l10n.evalGraphValue(ply, n),
-      increasedValue: l10n.evalGraphValue((ply + 1).clamp(0, n), n),
-      decreasedValue: l10n.evalGraphValue((ply - 1).clamp(0, n), n),
+      value: _valueAt(l10n, ply),
+      increasedValue: _valueAt(l10n, (ply + 1).clamp(0, n)),
+      decreasedValue: _valueAt(l10n, (ply - 1).clamp(0, n)),
       onIncrease: ply < n ? () => onSelect(ply + 1) : null,
       onDecrease: ply > 0 ? () => onSelect(ply - 1) : null,
       child: ExcludeSemantics(

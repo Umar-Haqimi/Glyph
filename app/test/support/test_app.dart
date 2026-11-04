@@ -38,6 +38,7 @@ class TestEnv {
     FilePickerService? picker,
     OpeningBook? book,
     EngineDriverFactory? driverFactory,
+    InMemoryAnalysisRepository Function(InMemoryStore store)? analysesBuilder,
     this.timeouts = const PipelineTimeouts(
       handshake: Duration(seconds: 2),
       stop: Duration(milliseconds: 100),
@@ -50,7 +51,7 @@ class TestEnv {
         book = book ?? OpeningBook(const {}),
         driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()) {
     games = InMemoryGameRepository(store);
-    analyses = InMemoryAnalysisRepository(store);
+    analyses = analysesBuilder?.call(store) ?? InMemoryAnalysisRepository(store);
   }
 
   final InMemoryStore store;

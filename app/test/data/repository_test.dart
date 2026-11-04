@@ -166,6 +166,23 @@ void contract(String name, Repos Function() create) {
       ]);
     });
 
+    test('position lines from a ply on: only the tail, same order', () async {
+      final id = (await r.games.save(newGame())).id;
+      final other = (await r.games.save(newGame(sourceId: 'other'))).id;
+      PositionLineRecord line(int game, int ply, int rank) =>
+          PositionLineRecord(gameId: game, ply: ply, rank: rank, scoreCp: ply * 10 + rank, depth: 16, pvUci: 'e2e4');
+      for (var ply = 0; ply < 5; ply++) {
+        await r.analyses.putPositionLines(id, ply, [line(id, ply, 2), line(id, ply, 1)]);
+      }
+      await r.analyses.putPositionLines(other, 3, [line(other, 3, 1)]);
+      expect((await r.analyses.positionLines(id)), hasLength(10));
+      expect((await r.analyses.positionLines(id, fromPly: 0)), hasLength(10));
+      final tail = await r.analyses.positionLines(id, fromPly: 3);
+      expect(tail.map((l) => (l.ply, l.rank)), [(3, 1), (3, 2), (4, 1), (4, 2)]);
+      expect(await r.analyses.positionLines(id, fromPly: 5), isEmpty);
+      expect((await r.analyses.positionLines(other, fromPly: 3)).single.gameId, other);
+    });
+
     test('savePosition: lines and completed_plies move together; terminal rows keep NULL scores', () async {
       final id = (await r.games.save(newGame())).id;
       await r.analyses.upsert(AnalysisRecord(

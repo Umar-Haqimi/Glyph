@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import 'board_data.dart';
 import 'board_format.dart';
 import 'move_badge.dart';
+import 'spoken_move.dart';
 
 /// Opens the Key moments sheet (SPEC F9): every Brilliant, Great, Miss,
 /// Mistake and Blunder, per side. Returns the ply the user picked, or null.
@@ -59,40 +60,45 @@ class KeyMomentsSheet extends StatelessWidget {
     if (moments.isEmpty) return const [];
     final name = side == Side.white ? data.record.white : data.record.black;
     final you = data.userSide == side;
+    final sideName = side == Side.white ? l10n.sideWhite : l10n.sideBlack;
+    final header = name == null
+        ? (you ? l10n.keyMomentsHeaderSideOnlyYou(sideName) : l10n.keyMomentsHeaderSideOnly(sideName))
+        : (you ? l10n.keyMomentsHeaderYou(sideName, name) : l10n.keyMomentsHeader(sideName, name));
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Text(
-          [
-            side == Side.white ? l10n.sideWhite : l10n.sideBlack,
-            ?name,
-            if (you) '(${l10n.playerYou})',
-          ].join(' '),
-          style: theme.textTheme.titleSmall,
-        ),
+        child: Text(header, style: theme.textTheme.titleSmall),
       ),
       for (final m in moments) _tile(context, l10n, theme, m),
     ];
   }
 
   Widget _tile(BuildContext context, AppLocalizations l10n, ThemeData theme, KeyMoment m) {
-    final move = formatMove(data.positionBefore(m.ply), data.game.plies[m.ply - 1].san);
+    final before = data.positionBefore(m.ply);
+    final san = data.game.plies[m.ply - 1].san;
+    final move = formatMove(before, san);
     final name = labelName(l10n, m.label);
-    final before = m.winBefore?.round();
-    final after = m.winAfter?.round();
-    final swing = before == null || after == null ? null : l10n.keyMomentWinChance(before, after);
+    // White's point of view like the gauge, the graph and the engine lines;
+    // the stored values are the mover's.
+    int? whitePov(double? win) => win == null ? null : (m.side == Side.white ? win : 100 - win).round();
+    final from = whitePov(m.winBefore);
+    final to = whitePov(m.winAfter);
+    final change = from == null || to == null ? null : l10n.keyMomentWinChance(from, to);
+    final spoken = l10n.moveListItemSemantics(spokenMove(l10n, before, san), name);
     return Semantics(
       button: true,
-      label: [move, name, ?swing].join(', '),
-      child: ExcludeSemantics(
-        child: ListTile(
-          key: Key('key-moment-${m.ply}'),
-          minTileHeight: 56,
-          leading: MoveBadge(label: m.label, size: 32, excludeSemantics: true),
-          title: Text(move),
-          subtitle: Text([name, ?swing].join(' · ')),
-          onTap: () => Navigator.of(context).pop(m.ply),
-        ),
+      label: change == null ? spoken : l10n.keyMomentSemantics(spoken, change),
+      // One node that carries the tap action for TalkBack; the tile's own
+      // semantics are excluded so the row is not read twice.
+      onTap: () => Navigator.of(context).pop(m.ply),
+      excludeSemantics: true,
+      child: ListTile(
+        key: Key('key-moment-${m.ply}'),
+        minTileHeight: 56,
+        leading: MoveBadge(label: m.label, size: 32, excludeSemantics: true),
+        title: Text(move),
+        subtitle: Text(change == null ? name : l10n.keyMomentSubtitle(name, change)),
+        onTap: () => Navigator.of(context).pop(m.ply),
       ),
     );
   }

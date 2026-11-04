@@ -1,5 +1,5 @@
 name: chessground
-description: Vendored copy of chessground 11.0.0 (lichess.org, GPL-3.0) with only free-licensed assets. See docs/DECISIONS.md.
+description: Vendored copy of chessground 11.0.0 (lichess.org, GPL-3.0) with only free-licensed assets. See NOTICE and docs/DECISIONS.md.
 version: 11.0.0
 repository: https://github.com/lichess-org/flutter-chessground
 publish_to: none
