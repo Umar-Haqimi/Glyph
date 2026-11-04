@@ -1,0 +1,44 @@
+# Stockfish 19, Threads=1 Hash=16 MultiPV=2 UCI_Chess960=true, go depth 16
+# game: stalemate
+# startFen: 7k/8/5K2/8/8/8/8/6Q1 w - - 0 1
+# moves: g1g6
+
+> position fen 7k/8/5K2/8/8/8/8/6Q1 w - - 0 1
+> go depth 16
+info string Available processors: 0-7
+info string Using 1 thread
+info string NNUE evaluation using nn-1a298aa575a0.nnue (109MiB, (86896, 1024, 32, 32, 1))
+info string Network replica 1: Shared memory.
+info depth 1 seldepth 3 multipv 1 score mate 1 nodes 61 nps 61000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 1 seldepth 3 multipv 2 score cp 716 nodes 61 nps 61000 hashfull 0 tbhits 0 time 1 pv f6f7
+info depth 2 seldepth 2 multipv 1 score mate 1 nodes 117 nps 117000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 2 seldepth 3 multipv 2 score cp 939 nodes 117 nps 117000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7
+info depth 3 seldepth 2 multipv 1 score mate 1 nodes 199 nps 199000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 3 seldepth 4 multipv 2 score mate 2 nodes 199 nps 199000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 4 seldepth 2 multipv 1 score mate 1 nodes 268 nps 268000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 4 seldepth 4 multipv 2 score mate 2 nodes 268 nps 268000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 5 seldepth 2 multipv 1 score mate 1 nodes 340 nps 340000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 5 seldepth 4 multipv 2 score mate 2 nodes 340 nps 340000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 6 seldepth 2 multipv 1 score mate 1 nodes 417 nps 417000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 6 seldepth 4 multipv 2 score mate 2 nodes 417 nps 417000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 7 seldepth 2 multipv 1 score mate 1 nodes 499 nps 499000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 7 seldepth 4 multipv 2 score mate 2 nodes 499 nps 499000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 8 seldepth 2 multipv 1 score mate 1 nodes 579 nps 579000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 8 seldepth 4 multipv 2 score mate 2 nodes 579 nps 579000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 9 seldepth 2 multipv 1 score mate 1 nodes 657 nps 657000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 9 seldepth 4 multipv 2 score mate 2 nodes 657 nps 657000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 10 seldepth 2 multipv 1 score mate 1 nodes 733 nps 733000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 10 seldepth 4 multipv 2 score mate 2 nodes 733 nps 733000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 11 seldepth 2 multipv 1 score mate 1 nodes 811 nps 811000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 11 seldepth 4 multipv 2 score mate 2 nodes 811 nps 811000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 12 seldepth 2 multipv 1 score mate 1 nodes 890 nps 890000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 12 seldepth 4 multipv 2 score mate 2 nodes 890 nps 890000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 13 seldepth 2 multipv 1 score mate 1 nodes 970 nps 970000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 13 seldepth 4 multipv 2 score mate 2 nodes 970 nps 970000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 14 seldepth 2 multipv 1 score mate 1 nodes 1045 nps 1045000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 14 seldepth 4 multipv 2 score mate 2 nodes 1045 nps 1045000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 15 seldepth 2 multipv 1 score mate 1 nodes 1125 nps 1125000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 15 seldepth 4 multipv 2 score mate 2 nodes 1125 nps 1125000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+info depth 16 seldepth 2 multipv 1 score mate 1 nodes 1202 nps 1202000 hashfull 0 tbhits 0 time 1 pv g1g7
+info depth 16 seldepth 4 multipv 2 score mate 2 nodes 1202 nps 1202000 hashfull 0 tbhits 0 time 1 pv f6f7 h8h7 g1g7
+bestmove g1g7

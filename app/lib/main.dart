@@ -7,6 +7,7 @@ import 'app.dart';
 import 'data/db.dart';
 import 'data/providers.dart';
 import 'data/sqlite_repositories.dart';
+import 'engine/engine_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +21,7 @@ Future<void> main() async {
         analysisRepositoryProvider.overrideWithValue(SqliteAnalysisRepository(db)),
         settingsRepositoryProvider.overrideWithValue(SqliteSettingsRepository(db)),
       ],
-      child: const GlyphApp(),
+      child: const EngineReloadGuard(child: GlyphApp()),
     ),
   );
 }

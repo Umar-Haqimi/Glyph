@@ -214,5 +214,43 @@
     }
   },
   "libraryLoadFailed": "Couldn't load your games.",
-  "importPasteEmpty": "Nothing pasted yet"
+  "importPasteEmpty": "Nothing pasted yet",
+  "analysisStarting": "Starting engine…",
+  "analysisQueued": "Waiting for another analysis to finish…",
+  "analysisRunning": "Analysing… {done}/{total}",
+  "@analysisRunning": {
+    "description": "Progress while the engine analyses a game: positions done of total",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "analysisCancelled": "Analysis cancelled at {done}/{total}",
+  "@analysisCancelled": {
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "analysisPaused": "Analysis paused at {done}/{total}",
+  "@analysisPaused": {
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "analysisIncomplete": "Analysis unfinished at {done}/{total}",
+  "@analysisIncomplete": {
+    "description": "Stored analysis that is not running any more (for example the app was closed)",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "analysisCompleted": "Analysis complete",
+  "analysisFailedUnavailable": "The engine couldn't start.",
+  "analysisFailedCrashed": "The engine stopped unexpectedly.",
+  "analysisCancel": "Cancel",
+  "analysisResume": "Resume",
+  "analysisRetry": "Retry"
 }

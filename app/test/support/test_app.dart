@@ -9,6 +9,7 @@ import 'package:glyph/app.dart';
 import 'package:glyph/data/in_memory.dart';
 import 'package:glyph/data/models.dart';
 import 'package:glyph/data/providers.dart';
+import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/l10n/app_localizations_en.dart';
 import 'package:glyph/platform/file_picker_service.dart';
 import 'package:glyph_core/glyph_core.dart';
@@ -31,11 +32,17 @@ class FakeFilePicker implements FilePickerService {
 }
 
 class TestEnv {
-  TestEnv({Map<String, String>? settings, FilePickerService? picker, OpeningBook? book})
+  TestEnv({
+    Map<String, String>? settings,
+    FilePickerService? picker,
+    OpeningBook? book,
+    EngineDriverFactory? driverFactory,
+  })
       : store = InMemoryStore(),
         settings = InMemorySettingsRepository(settings),
         picker = picker ?? FakeFilePicker(null),
-        book = book ?? OpeningBook(const {}) {
+        book = book ?? OpeningBook(const {}),
+        driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()) {
     games = InMemoryGameRepository(store);
     analyses = InMemoryAnalysisRepository(store);
   }
@@ -46,6 +53,10 @@ class TestEnv {
   final InMemorySettingsRepository settings;
   final FilePickerService picker;
   final OpeningBook book;
+
+  /// Creates the engine of the app under test (default: a fake that answers
+  /// every search with a trivial line).
+  final EngineDriverFactory driverFactory;
   int clock = 1000000;
 
   List<Override> get overrides => [
@@ -55,6 +66,12 @@ class TestEnv {
         filePickerServiceProvider.overrideWithValue(picker),
         openingBookProvider.overrideWith((ref) => book),
         nowMsProvider.overrideWithValue(() => clock++),
+        engineDriverFactoryProvider.overrideWithValue(driverFactory),
+        pipelineTimeoutsProvider.overrideWithValue(const PipelineTimeouts(
+          handshake: Duration(seconds: 2),
+          stop: Duration(milliseconds: 100),
+          searchIdle: Duration(seconds: 2),
+        )),
       ];
 
   Future<void> pump(WidgetTester tester) async {
