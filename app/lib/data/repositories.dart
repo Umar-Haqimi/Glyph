@@ -1,0 +1,59 @@
+import 'models.dart';
+import 'package:glyph_core/glyph_core.dart';
+
+/// Saved games. The SQLite implementation is `SqliteGameRepository`; tests and
+/// widget tests use `InMemoryGameRepository`.
+abstract interface class GameRepository {
+  /// Saves [game]. When `game.sourceId` is non-null and a game with the same
+  /// (source, sourceId) exists, nothing is written and the existing id comes
+  /// back with `duplicate: true`.
+  Future<SaveResult> save(NewGame game);
+
+  /// All games, newest import first, with their analysis summary.
+  Future<List<GameRecord>> list();
+
+  Future<GameRecord?> get(int id);
+
+  /// Deletes the game and, by cascade, its analysis, lines and labels.
+  Future<void> delete(int id);
+
+  Future<void> setUserSide(int id, Side? side);
+}
+
+/// Per-game analysis results (the engine pipeline arrives in M3).
+abstract interface class AnalysisRepository {
+  Future<AnalysisRecord?> get(int gameId);
+
+  Future<void> upsert(AnalysisRecord analysis);
+
+  /// Replaces the lines of one position (one transaction), so a ply is either
+  /// fully persisted or not at all.
+  Future<void> putPositionLines(int gameId, int ply, List<PositionLineRecord> lines);
+
+  /// All lines of a game ordered by (ply, rank).
+  Future<List<PositionLineRecord>> positionLines(int gameId);
+
+  Future<void> putLabels(int gameId, List<MoveLabelRecord> labels);
+
+  /// All labels of a game ordered by ply.
+  Future<List<MoveLabelRecord>> labels(int gameId);
+
+  /// Removes lines, labels and the analysis row (for "Re-analyse").
+  Future<void> clear(int gameId);
+}
+
+/// Plain key/value settings. Never holds secrets (SPEC 5.4).
+abstract interface class SettingsRepository {
+  Future<String?> get(String key);
+
+  Future<void> set(String key, String value);
+
+  Future<void> remove(String key);
+}
+
+/// Setting keys.
+abstract final class SettingsKeys {
+  static const lichessUsername = 'lichess_username';
+  static const chessComUsername = 'chesscom_username';
+  static const classifierVersion = 'classifier_version';
+}

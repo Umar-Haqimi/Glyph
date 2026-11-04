@@ -1,0 +1,31 @@
+[Event "Annotated classic"]
+[Site "Paris FRA"]
+[Date "1858.??.??"]
+[Round "?"]
+[White "Morphy, Paul"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+[ECO "C41"]
+
+% This line is a PGN escape line and must be ignored.
+{ Opera game, annotated. [%clk 1:00:00] }
+1. e4 e5 2. Nf3 d6 $1 { A solid move, though {nested braces} are unusual in PGN. }
+(2... Nc6 3. Bb5 { The Ruy Lopez {a "nested" comment} } a6 $5 (3... Nf6 $2) 4. Ba4 )
+3. d4 Bg4 $6 ; a line comment with a stray { brace
+4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 $2 8. Nc3 c6 9. Bg5 b5 $4
+10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6
+15. Bxd7+ Nxd7 16. Qb8+ $3 { [%eval #2] [%clk 0:00:41.5] } 16... Nxb8 17. Rd8# { Checkmate.
+
+[Event "Not a game"]
+[White "Nobody"]
+
+The blank line and the tag lines above are inside a comment. } 1-0
+[Event "Second game, no blank line before it"]
+[Site "?"]
+[Date "2026.10.30"]
+[Round "?"]
+[White "Alice"]
+[Black "Boris"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2

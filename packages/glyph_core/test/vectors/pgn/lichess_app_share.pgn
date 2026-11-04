@@ -1,0 +1,16 @@
+[Event "Blitz Titled Arena July '23"]
+[Site "https://lichess.org/game/Lk80KJQh"]
+[Date "2023.07.01"]
+[Round "-"]
+[White "player_white"]
+[Black "player_black"]
+[Result "1-0"]
+[WhiteElo "3203"]
+[BlackElo "2445"]
+[Variant "Standard"]
+[TimeControl "180+0"]
+[ECO "A01"]
+[Opening "Nimzo-Larsen Attack"]
+[Termination "Normal"]
+
+1. b3 e6 2. Bb2 d5 3. Nf3 c5 4. e4 Nc6 5. exd5 exd5 6. Bb5 Nf6 7. O-O Be7 8. Ne5 Bd7 9. Bxc6 bxc6 10. Re1 O-O 11. Nc3 Bd6 12. Na4 Re8 13. Qf3 Ne4 14. Qxf7+ Kh8 15. Ng6+ hxg6 16. Qxg7# 1-0

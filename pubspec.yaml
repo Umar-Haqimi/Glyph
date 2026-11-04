@@ -5,6 +5,10 @@ publish_to: none
 environment:
   sdk: ^3.13.0
 
+dependencies:
+  crypto: ^3.0.8
+  glyph_core: any
+
 workspace:
   - packages/glyph_core
   - app

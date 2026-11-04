@@ -1,16 +1,13 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glyph/app.dart';
 import 'package:glyph/features/explain/explain_sheet.dart';
-import 'package:glyph/l10n/app_localizations_en.dart';
+import 'package:glyph/routes.dart';
 import 'package:material_ui/material_ui.dart';
 
-final _l10n = AppLocalizationsEn();
+import 'support/test_app.dart';
 
-Future<void> _pump(WidgetTester tester) async {
-  await tester.pumpWidget(const ProviderScope(child: GlyphApp()));
-  await tester.pumpAndSettle();
-}
+final _l10n = l10n;
+
+Future<void> _pump(WidgetTester tester) => TestEnv().pump(tester);
 
 void main() {
   testWidgets('library shows empty state and import FAB', (tester) async {
@@ -30,9 +27,9 @@ void main() {
     expect(find.text(_l10n.importFromChessCom), findsOneWidget);
   });
 
-  testWidgets('sample board -> report and explain placeholders', (tester) async {
+  testWidgets('board -> report and explain placeholders', (tester) async {
     await _pump(tester);
-    await tester.tap(find.text(_l10n.libraryOpenSampleBoard));
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(Routes.board);
     await tester.pumpAndSettle();
     expect(find.text(_l10n.boardTitle), findsOneWidget);
     expect(find.text(_l10n.placeholderComingSoon), findsOneWidget);

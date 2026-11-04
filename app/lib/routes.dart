@@ -20,7 +20,7 @@ abstract final class Routes {
   static Route<void> onGenerateRoute(RouteSettings settings) {
     final WidgetBuilder builder = switch (settings.name) {
       library => (_) => const LibraryScreen(),
-      board => (_) => const BoardScreen(),
+      board => (_) => BoardScreen(gameId: settings.arguments as int?),
       report => (_) => const ReportScreen(),
       Routes.settings => (_) => const SettingsScreen(),
       about => (_) => const AboutScreen(),

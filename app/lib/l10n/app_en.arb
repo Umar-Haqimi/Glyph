@@ -1,32 +1,28 @@
 {
   "@@locale": "en",
-
   "appTitle": "Glyph",
-  "@appTitle": { "description": "Application name" },
-
+  "@appTitle": {
+    "description": "Application name"
+  },
   "placeholderComingSoon": "Coming in a later milestone.",
-  "@placeholderComingSoon": { "description": "Body text of screens that are not built yet" },
-
+  "@placeholderComingSoon": {
+    "description": "Body text of screens that are not built yet"
+  },
   "libraryTitle": "Glyph",
   "libraryEmptyTitle": "No games yet",
   "libraryEmptyAction": "Import your first game",
   "libraryImportFab": "Import",
-  "libraryOpenSampleBoard": "Open sample board",
-
   "importSheetTitle": "Import a game",
   "importPastePgn": "Paste PGN",
   "importOpenFile": "Open file",
   "importFromLichess": "From lichess",
   "importFromChessCom": "From chess.com",
-
   "boardTitle": "Board",
   "boardKeyMoments": "Key moments",
   "boardReport": "Report",
   "boardExplain": "Explain",
-
   "reportTitle": "Report",
   "explainTitle": "Explain",
-
   "settingsTitle": "Settings",
   "settingsTooltip": "Settings",
   "settingsAppearance": "Appearance",
@@ -37,11 +33,9 @@
   "settingsDynamicColor": "Dynamic colour",
   "settingsDynamicColorSubtitle": "Use your wallpaper colours on Android 12 and newer.",
   "settingsAbout": "About",
-
   "aboutTitle": "About",
   "aboutLicenseNotice": "Glyph is free software, licensed under the GNU General Public License, version 3 or later.",
   "aboutLicenses": "Open-source licences",
-
   "labelBrilliant": "Brilliant",
   "labelGreat": "Great",
   "labelBest": "Best",
@@ -52,5 +46,173 @@
   "labelInaccuracy": "Inaccuracy",
   "labelMistake": "Mistake",
   "labelMiss": "Miss",
-  "labelBlunder": "Blunder"
+  "labelBlunder": "Blunder",
+  "libraryUnknownPlayer": "Unknown",
+  "libraryGameTitle": "{white} – {black}",
+  "@libraryGameTitle": {
+    "description": "Players of a game, e.g. \"Alice – Bob\"",
+    "placeholders": {
+      "white": {
+        "type": "String"
+      },
+      "black": {
+        "type": "String"
+      }
+    }
+  },
+  "libraryPlayerWithElo": "{name} ({elo})",
+  "@libraryPlayerWithElo": {
+    "description": "Player name with rating",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "elo": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryMoveCount": "{count, plural, =1{1 move} other{{count} moves}}",
+  "@libraryMoveCount": {
+    "description": "Number of full moves in a game",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "librarySourcePaste": "Pasted",
+  "librarySourceFile": "File",
+  "librarySourceShare": "Shared",
+  "librarySourceLichess": "lichess",
+  "librarySourceChessCom": "chess.com",
+  "libraryAnalysisNone": "Not analysed",
+  "libraryAnalysisRunning": "Analysing {percent}%",
+  "@libraryAnalysisRunning": {
+    "description": "Analysis in progress",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryAnalysisPartial": "Partly analysed {percent}%",
+  "@libraryAnalysisPartial": {
+    "description": "Analysis stopped before the end",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryAnalysisDone": "Analysed",
+  "libraryAccuracyWhite": "White {value}%",
+  "@libraryAccuracyWhite": {
+    "description": "Accuracy chip",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "libraryAccuracyBlack": "Black {value}%",
+  "@libraryAccuracyBlack": {
+    "description": "Accuracy chip",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "libraryYouWhite": "You: White",
+  "libraryYouBlack": "You: Black",
+  "libraryGameDeleted": "Game deleted",
+  "libraryUndo": "Undo",
+  "libraryDeleteAction": "Delete",
+  "libraryChess960": "Chess960",
+  "importComingSoon": "Coming soon",
+  "importPasteTitle": "Paste PGN",
+  "importPasteHint": "Paste one game or a whole file of games",
+  "importPasteFromClipboard": "Paste from clipboard",
+  "importClear": "Clear",
+  "importGamesFound": "{count, plural, =1{1 game found} other{{count} games found}}",
+  "@importGamesFound": {
+    "description": "Live validation result",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importGamesFoundSkipped": "{count, plural, =1{1 game found} other{{count} games found}}, {skipped} skipped",
+  "@importGamesFoundSkipped": {
+    "description": "Live validation result with skipped games",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "importChooseGame": "Choose a game to import",
+  "importSave": "Save",
+  "importFileTitle": "Choose a game",
+  "importFileOpenFailed": "Couldn't open this file.",
+  "importIssueGame": "Game {game}: {message}",
+  "@importIssueGame": {
+    "description": "A skipped game and its reason",
+    "placeholders": {
+      "game": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "importErrorTooLarge": "This file is larger than 2 MB.",
+  "importErrorNoGames": "No game found.",
+  "importErrorIllegalMove": "Game {game}, move {move} ({san}): illegal move.",
+  "@importErrorIllegalMove": {
+    "description": "An illegal move in a PGN; move is like \"14\" or \"14...\"",
+    "placeholders": {
+      "game": {
+        "type": "int"
+      },
+      "move": {
+        "type": "String"
+      },
+      "san": {
+        "type": "String"
+      }
+    }
+  },
+  "importErrorUnsupportedVariant": "{variant} games aren't supported.",
+  "@importErrorUnsupportedVariant": {
+    "placeholders": {
+      "variant": {
+        "type": "String"
+      }
+    }
+  },
+  "importErrorInvalidFen": "The starting position (FEN) isn't valid.",
+  "importErrorTooManyPlies": "More than 1000 half-moves.",
+  "importErrorNoMoves": "No moves.",
+  "importErrorTooManyGames": "Only the first 500 games are listed.",
+  "boardTitleGame": "{white} – {black}",
+  "@boardTitleGame": {
+    "description": "Board app bar title",
+    "placeholders": {
+      "white": {
+        "type": "String"
+      },
+      "black": {
+        "type": "String"
+      }
+    }
+  },
+  "libraryLoadFailed": "Couldn't load your games.",
+  "importPasteEmpty": "Nothing pasted yet"
 }

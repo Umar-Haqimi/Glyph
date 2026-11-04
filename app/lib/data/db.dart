@@ -1,0 +1,121 @@
+import 'package:sqlite3/sqlite3.dart';
+
+/// Thin wrapper around a sqlite3 [Database]: foreign keys on, `user_version`
+/// migrations, transactions. All SQL in the app is raw SQL (SPEC 5.4).
+class Db {
+  Db._(this.raw, this._migrations);
+
+  /// Opens (creating and migrating if needed) the database file at [path].
+  /// [migrations] defaults to [Db.migrations] (a parameter for tests).
+  factory Db.open(String path, {List<void Function(Database db)>? migrations}) =>
+      Db._(sqlite3.open(path), migrations ?? Db.migrations).._init();
+
+  /// A fresh in-memory database (tests).
+  factory Db.inMemory({List<void Function(Database db)>? migrations}) =>
+      Db._(sqlite3.openInMemory(), migrations ?? Db.migrations).._init();
+
+  final Database raw;
+  final List<void Function(Database db)> _migrations;
+
+  /// The schema version this build creates. Equals `migrations.length`.
+  static int get schemaVersion => migrations.length;
+
+  /// Migration `i` upgrades `user_version` i to i + 1. Never edit a shipped
+  /// migration; append a new one.
+  static final List<void Function(Database db)> migrations = [_v1];
+
+  void _init() {
+    raw.execute('PRAGMA foreign_keys = ON');
+    _migrate();
+  }
+
+  void _migrate() {
+    var version = raw.userVersion;
+    final target = _migrations.length;
+    if (version > target) {
+      throw StateError('Database is newer (v$version) than this app (v$target).');
+    }
+    while (version < target) {
+      raw.execute('BEGIN');
+      try {
+        _migrations[version](raw);
+        raw.userVersion = version + 1;
+        raw.execute('COMMIT');
+      } catch (_) {
+        raw.execute('ROLLBACK');
+        rethrow;
+      }
+      version++;
+    }
+  }
+
+  /// Runs [body] in a transaction (rolled back if it throws).
+  T transaction<T>(T Function() body) {
+    raw.execute('BEGIN');
+    try {
+      final result = body();
+      raw.execute('COMMIT');
+      return result;
+    } catch (_) {
+      raw.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  void close() => raw.close();
+}
+
+void _v1(Database db) {
+  db.execute('''
+CREATE TABLE games (
+  id INTEGER PRIMARY KEY,
+  source TEXT NOT NULL CHECK (source IN ('paste','file','share','lichess','chesscom')),
+  source_id TEXT,
+  pgn TEXT NOT NULL,
+  white TEXT, black TEXT, white_elo INTEGER, black_elo INTEGER,
+  result TEXT, date TEXT, time_control TEXT, event TEXT,
+  variant TEXT NOT NULL DEFAULT 'standard' CHECK (variant IN ('standard','chess960')),
+  start_fen TEXT,
+  eco TEXT, opening_name TEXT,
+  user_side TEXT CHECK (user_side IN ('white','black')),
+  ply_count INTEGER NOT NULL,
+  imported_at INTEGER NOT NULL,
+  UNIQUE (source, source_id)
+)''');
+  db.execute('''
+CREATE TABLE analyses (
+  game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  engine TEXT NOT NULL,
+  depth INTEGER NOT NULL, multipv INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running','paused','cancelled','completed','failed')),
+  completed_plies INTEGER NOT NULL DEFAULT 0,
+  white_accuracy REAL, black_accuracy REAL,
+  updated_at INTEGER NOT NULL
+)''');
+  db.execute('''
+CREATE TABLE position_lines (
+  game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  ply INTEGER NOT NULL,
+  rank INTEGER NOT NULL CHECK (rank IN (1,2)),
+  score_cp INTEGER, score_mate INTEGER,
+  depth INTEGER NOT NULL,
+  pv_uci TEXT NOT NULL,
+  PRIMARY KEY (game_id, ply, rank)
+)''');
+  db.execute('''
+CREATE TABLE move_labels (
+  game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  ply INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  ep_loss REAL, win_before REAL, win_after REAL,
+  best_uci TEXT,
+  PRIMARY KEY (game_id, ply)
+)''');
+  db.execute('''
+CREATE TABLE llm_cache (
+  key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('move','summary')),
+  content TEXT NOT NULL, model TEXT NOT NULL, created_at INTEGER NOT NULL
+)''');
+  db.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+}
