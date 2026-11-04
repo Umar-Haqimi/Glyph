@@ -58,11 +58,18 @@ void main() {
   final streams = vectors.where((v) => v['type'] == 'stream').toList();
   final errors = vectors.where((v) => v['type'] == 'http').toList();
 
-  test('the manifest says the vectors are synthetic', () {
-    expect(manifest['synthetic'], isTrue);
+  test('synthetic vectors carry the marker; the top-level flag means "any synthetic"', () {
+    final flags = [for (final v in vectors) v['synthetic'] as bool];
+    expect(manifest['synthetic'], flags.any((f) => f));
     for (final v in vectors) {
       final text = File('$dir/${v['file']}').readAsStringSync();
-      expect(text.toLowerCase(), contains('synthetic'), reason: '${v['file']} must carry the marker');
+      if (v['synthetic'] == true) {
+        expect(text.toLowerCase(), contains('synthetic'), reason: '${v['file']} must carry the marker');
+      } else {
+        // A real capture must not claim to be synthetic and must be redacted.
+        expect(text.toLowerCase(), isNot(contains('synthetic')), reason: '${v['file']} is marked real');
+        expect(text, isNot(matches(RegExp(r'sk-|bearer', caseSensitive: false))), reason: '${v['file']} is not redacted');
+      }
     }
   });
 

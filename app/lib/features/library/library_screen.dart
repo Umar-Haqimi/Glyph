@@ -128,7 +128,9 @@ class _GameList extends ConsumerWidget {
           background: _swipeBackground(scheme, Alignment.centerLeft),
           secondaryBackground: _swipeBackground(scheme, Alignment.centerRight),
           onDismissed: (_) => _onDismissed(context, ref, game),
-          child: GameCard(game: game),
+          // Dismissible lays its child out in a Stack, which loosens the width: without
+          // this the card shrinks to its content and short cards come out narrower.
+          child: SizedBox(width: double.infinity, child: GameCard(game: game)),
         );
       },
     );

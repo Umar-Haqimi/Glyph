@@ -71,7 +71,7 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 |---|---|---|---|---|
 | D1 | OpenAI endpoint, streamed explanation | Streams, cached on repeat | | |
 | D2 | OpenRouter endpoint | Streams | | |
-| D3 | Ollama on LAN over `http://` (private address) | Allowed, streams | | |
+| D3 | Ollama on LAN over `http://` (private address) | Allowed, streams | | Ollama must listen on the LAN: start it with `OLLAMA_HOST=0.0.0.0` (or set it in the service config) and open port 11434 in the computer's firewall; by default it only answers on localhost. LM Studio: turn on "Serve on Local Network". |
 | D4 | Public `http://` host | Blocked with the correct copy | | |
 | D5 | Wrong key (401), wrong model (404) | Mapped error copy | | |
 | D6 | Airplane mode: analysis works | Works | | |

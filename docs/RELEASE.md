@@ -26,8 +26,12 @@ or `app/android/key.properties` (`storeFile` is relative to `app/android/`, `sto
 
 ## 2. Re-record data that was only synthetic or from another engine
 
-- [ ] **Stockfish 19 transcripts.** The M4 transcripts were recorded with Stockfish 16. With a Stockfish 19 desktop binary: `STOCKFISH_PATH=/path/to/stockfish dart run tool/record_transcripts.dart` (see `docs/m0/VECTORS.md` section 3), then `cd packages/glyph_core && dart test`. If a `classify/*.json` expectation moves, check that the new label is right for the position before updating the vector.
-- [ ] **Real SSE captures** for OpenAI, OpenRouter and Ollama plus error bodies, with the `curl` commands and redaction in `docs/m0/VECTORS.md` section 4. Replace the synthetic files one by one, update `test/vectors/sse/manifest.json` (remove `"synthetic"` for replaced files), run `dart test`. `grep -ciE 'sk-|bearer'` on the saved files must print 0.
+- [ ] **Stockfish 19 transcripts.** The M4 transcripts were recorded with Stockfish 16. With a Stockfish 19 desktop binary: `STOCKFISH_PATH=/path/to/stockfish dart run tool/record_transcripts.dart --force` (without `--force` the tool skips games that already have a transcript, so nothing would be re-recorded; see `docs/m0/VECTORS.md` section 3), then `cd packages/glyph_core && dart test`. If a `classify/*.json` expectation moves, check that the new label is right for the position before updating the vector.
+- [ ] **Real SSE captures** for OpenAI, OpenRouter and Ollama plus error bodies, with the `curl` commands and redaction in `docs/m0/VECTORS.md` section 4. Replace the synthetic files one by one:
+  1. Save the redacted capture over the file of the same name in `packages/glyph_core/test/vectors/sse/` (it must not contain the word "synthetic"; `grep -ciE 'sk-|bearer'` on it must print 0).
+  2. In `manifest.json` set that entry's `"synthetic"` to `false` and fix its expected `text`, `finishReason` / `errorKind` (or `status`, `param`) to what the real answer says. The top-level `"synthetic"` must be `true` while any entry is still synthetic and `false` when none is (the test checks this).
+  3. Run `cd packages/glyph_core && dart test test/llm/sse_vectors_test.dart`: entries marked synthetic must carry the marker, real ones must not and must be redacted.
+  4. Do not run `tool/gen_sse_fixtures.dart` afterwards: it regenerates all files as synthetic and overwrites the captures.
 - [ ] Optional: refresh lichess accuracy vectors (`dart run tool/fetch_lichess_vectors.dart`); the committed files are the reference.
 
 ## 3. Checks on the host
@@ -74,13 +78,13 @@ sha256sum -c SHA256SUMS
 git tag -s v0.1.0 -m "Glyph 0.1.0"     # or -a
 git push origin v0.1.0
 ```
-Then create the GitHub release `v0.1.0` with the `CHANGELOG.md` text and attach the three split APKs and `SHA256SUMS`. If the `release.yml` workflow is used, it does this when the tag is pushed (see below); check its output either way.
+The tag push starts `.github/workflows/release.yml`, which is the one publishing path: it checks that the tag matches `app/pubspec.yaml`, builds and signs the APKs, writes `SHA256SUMS` and creates a **draft** GitHub release `v0.1.0` whose notes are the `0.1.0` section of `CHANGELOG.md`. Review the draft (three split APKs plus `SHA256SUMS`, notes) and press **Publish release** yourself. Only if the workflow fails and cannot be fixed, build locally (sections 4 and 6) and create the release by hand with `gh release create v0.1.0 --draft --notes-file <the 0.1.0 section>` and the same four files.
 
 - [ ] Download an attached APK and verify its SHA-256 and `apksigner verify --print-certs`.
 
-## Optional: release workflow
+## The release workflow
 
-`.github/workflows/release.yml` runs on `v*` tags: runs the core tests, analyze and widget tests, builds with `tool/build_release.sh`, writes `SHA256SUMS`, and creates a **draft** GitHub release with the three APKs. Repository secrets it needs:
+`.github/workflows/release.yml` runs on `v*` tags. Job `build` (read-only token, no persisted credentials): checks the tag against `app/pubspec.yaml` (`${GITHUB_REF_NAME#v}` must equal the version without `+build`), runs the core tests, analyze and widget tests, builds with `tool/build_release.sh`, writes `SHA256SUMS` and uploads the APKs and sums as a workflow artifact. Job `publish` (the only one with `contents: write`): downloads that artifact and creates a **draft** GitHub release with the three APKs, `SHA256SUMS` and the notes cut from that version's `CHANGELOG.md` section. Third-party actions are pinned to full commit SHAs (version in a comment); update them deliberately. Repository secrets it needs:
 
 | Secret | Content |
 |---|---|
@@ -89,4 +93,4 @@ Then create the GitHub release `v0.1.0` with the `CHANGELOG.md` text and attach 
 | `GLYPH_KEY_ALIAS` | key alias (`glyph`) |
 | `GLYPH_KEY_PASSWORD` | key password |
 
-It does not replace sections 2 and 5: re-recording and the device test are manual.
+It does not replace sections 2 and 5: re-recording and the device test are manual. The CHANGELOG heading must be `## [0.1.0] ...` for the notes step to find it.

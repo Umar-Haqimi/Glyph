@@ -164,4 +164,16 @@ void main() {
     expect(states.whereType<AnalysisFailed>(), isEmpty);
     expect(states.last, isA<AnalysisCancelled>());
   });
+
+  testWidgets('every game card has the full list width, whatever its content', (tester) async {
+    final env = TestEnv();
+    await env.seed(white: 'A', black: 'B', result: '*', importedAt: 1);
+    await env.seed(white: 'Alexander the Great of Macedonia', black: 'Bartholomew the Brave of Brunswick', result: '1-0', importedAt: 2, status: AnalysisStatus.completed, completedPlies: 40, whiteAccuracy: 91.4, blackAccuracy: 78.6, eco: 'C60', openingName: 'Ruy Lopez');
+    await env.seed(white: 'Cy', black: 'Di', result: '0-1', importedAt: 3);
+    await env.pump(tester);
+    final widths = [for (final e in tester.elementList(find.byType(Card))) tester.getSize(find.byWidget(e.widget)).width];
+    expect(widths, hasLength(3));
+    expect(widths.toSet(), hasLength(1), reason: 'card widths $widths');
+    expect(widths.first, greaterThan(300));
+  });
 }

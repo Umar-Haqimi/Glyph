@@ -56,7 +56,7 @@ String _flutterRoot() {
 }
 
 class _Sample {
-  const _Sample(this.transcript, this.white, this.black, this.whiteElo, this.blackElo, this.date, this.source, this.userSide);
+  const _Sample(this.transcript, this.white, this.black, this.whiteElo, this.blackElo, this.date, this.source, this.userSide, this.result);
   final String transcript;
   final String white;
   final String black;
@@ -65,13 +65,18 @@ class _Sample {
   final String date;
   final GameSource source;
   final Side userSide;
+
+  /// The real result of the recorded moves: 1-0 for the Opera game (it ends in
+  /// Rd8#); the other three are recorded opening fragments (12 to 16 plies)
+  /// that end mid-game, so their result is "*".
+  final String result;
 }
 
 const _samples = [
-  _Sample('blunder_white', 'glyph_demo', 'rook_roller', 1512, 1498, '2026.10.28', GameSource.lichess, Side.white),
-  _Sample('italian_castle', 'knight_errant', 'glyph_demo', 1420, 1455, '2026.10.26', GameSource.chesscom, Side.black),
-  _Sample('queens_gambit', 'glyph_demo', 'pawn_storm', 1533, 1561, '2026.10.21', GameSource.paste, Side.white),
-  _Sample('mate_opera', 'Paul Morphy', 'Duke of Brunswick & Count Isouard', 0, 0, '1858.??.??', GameSource.paste, Side.white),
+  _Sample('blunder_white', 'glyph_demo', 'rook_roller', 1512, 1498, '2026.10.28', GameSource.lichess, Side.white, '*'),
+  _Sample('italian_castle', 'knight_errant', 'glyph_demo', 1420, 1455, '2026.10.26', GameSource.chesscom, Side.black, '*'),
+  _Sample('queens_gambit', 'glyph_demo', 'pawn_storm', 1533, 1561, '2026.10.21', GameSource.paste, Side.white, '*'),
+  _Sample('mate_opera', 'Paul Morphy', 'Duke of Brunswick & Count Isouard', 0, 0, '1858.??.??', GameSource.paste, Side.white, '1-0'),
 ];
 
 Future<void> _settle(WidgetTester tester, {int rounds = 12}) async {
@@ -101,6 +106,9 @@ void main() {
   testWidgets('README screenshots', timeout: const Timeout(Duration(minutes: 5)), (tester) async {
     WidgetsApp.debugAllowBannerOverride = false; // no "DEBUG" ribbon in the images
     addTearDown(() => WidgetsApp.debugAllowBannerOverride = true);
+    // The test binding turns shadows off; the README images should show the real elevation.
+    final shadowsWereDisabled = debugDisableShadows;
+    debugDisableShadows = false;
     final root = _flutterRoot();
     await tester.runAsync(() async {
       await _loadFont('Roboto', [
@@ -135,7 +143,7 @@ void main() {
       final tg = games.firstWhere((g) => g.name == s.transcript);
       final pgn = '[Event "Glyph sample"]\n[Date "${s.date}"]\n[White "${s.white}"]\n[Black "${s.black}"]\n'
           '${s.whiteElo > 0 ? '[WhiteElo "${s.whiteElo}"]\n[BlackElo "${s.blackElo}"]\n' : ''}'
-          '[Result "*"]\n\n${tg.toPgn()}';
+          '[Result "${s.result}"]\n\n${tg.toPgn()}';
       final game = parsePgn(pgn).games.first;
       final saved = await env.games.save(NewGame.fromGame(
         game,
@@ -168,7 +176,7 @@ void main() {
 
     await _shot(tester, boundaryKey, 'library');
 
-    // Board: the Opera game at 17. Qb8+ (ply 31).
+    // Board: the Opera game after 16. Qb8+ (ply 31 of 33).
     final opera = ids['mate_opera']!;
     await tester.tap(find.byKey(ValueKey('game-$opera')));
     await _settle(tester, rounds: 10);
@@ -208,7 +216,8 @@ void main() {
     await _settle(tester, rounds: 3);
     await fake.finish();
     await _settle(tester, rounds: 12);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
+    // The report shot shows the summary card (scroll it into view).
+    await tester.ensureVisible(find.byKey(const Key('summary-card')));
     await _settle(tester, rounds: 6);
     await _shot(tester, boundaryKey, 'report');
 
@@ -219,5 +228,6 @@ void main() {
     await tester.tap(find.byTooltip(l10n.settingsTooltip));
     await _settle(tester, rounds: 12);
     await _shot(tester, boundaryKey, 'settings');
+    debugDisableShadows = shadowsWereDisabled; // the binding checks this before tearDown runs
   });
 }

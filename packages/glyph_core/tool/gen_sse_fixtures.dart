@@ -32,6 +32,7 @@ void writeStream(String file, String body, {required String? finish, String? err
   File('$outDir/$file').writeAsStringSync(body);
   manifest.add({
     'file': file,
+    'synthetic': true,
     'type': 'stream',
     'text': errorKind == null || text != null ? (text ?? fullText) : null,
     'finishReason': finish,
@@ -48,7 +49,7 @@ void writeHttp(String file, int status, String reason, String contentType, Strin
     ..write('\r\n')
     ..write(body);
   File('$outDir/$file').writeAsStringSync(out.toString());
-  manifest.add({'file': file, 'type': 'http', 'status': status, 'errorKind': kind, 'param': param, 'note': note});
+  manifest.add({'file': file, 'synthetic': true, 'type': 'http', 'status': status, 'errorKind': kind, 'param': param, 'note': note});
 }
 
 void main() {
@@ -247,8 +248,8 @@ void main() {
 
   File('$outDir/manifest.json').writeAsStringSync(
     '${const JsonEncoder.withIndent('  ').convert({
-      'synthetic': true,
-      'note': synthetic,
+      'synthetic': true, // true while ANY vector is synthetic
+      'note': 'Top-level "synthetic" is true while ANY vector is synthetic; each vector has its own flag (set it to false when replaced by a real capture, docs/RELEASE.md section 2). Do not re-run this generator after replacing files: it overwrites them. $synthetic',
       'vectors': manifest,
     })}\n',
   );

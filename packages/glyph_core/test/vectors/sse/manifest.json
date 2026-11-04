@@ -1,9 +1,10 @@
 {
   "synthetic": true,
-  "note": "SYNTHETIC vector: hand-built from the documented format, NOT a real capture (docs/m0/VECTORS.md section 4)",
+  "note": "Top-level \"synthetic\" is true while ANY vector is synthetic. Each vector has its own \"synthetic\" flag; set it to false when the file is replaced by a real capture (docs/RELEASE.md section 2). SYNTHETIC vectors are hand-built from the documented format, NOT real captures (docs/m0/VECTORS.md section 4)",
   "vectors": [
     {
       "file": "openai_ok.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -12,6 +13,7 @@
     },
     {
       "file": "openai_usage.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -20,6 +22,7 @@
     },
     {
       "file": "openai_length.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...",
       "finishReason": "length",
@@ -28,6 +31,7 @@
     },
     {
       "file": "openai_midstream_error.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight —",
       "finishReason": null,
@@ -36,6 +40,7 @@
     },
     {
       "file": "openrouter_ok.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -44,6 +49,7 @@
     },
     {
       "file": "openrouter_midstream_error.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight —",
       "finishReason": null,
@@ -52,6 +58,7 @@
     },
     {
       "file": "ollama_ok.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -60,6 +67,7 @@
     },
     {
       "file": "ollama_reasoning.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -68,6 +76,7 @@
     },
     {
       "file": "crlf_multiline.sse",
+      "synthetic": true,
       "type": "stream",
       "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
       "finishReason": "stop",
@@ -76,6 +85,7 @@
     },
     {
       "file": "openai_401.http",
+      "synthetic": true,
       "type": "http",
       "status": 401,
       "errorKind": "unauthorized",
@@ -84,6 +94,7 @@
     },
     {
       "file": "openai_404_model.http",
+      "synthetic": true,
       "type": "http",
       "status": 404,
       "errorKind": "modelNotFound",
@@ -92,6 +103,7 @@
     },
     {
       "file": "openai_429_rate.http",
+      "synthetic": true,
       "type": "http",
       "status": 429,
       "errorKind": "rateLimited",
@@ -100,6 +112,7 @@
     },
     {
       "file": "openai_429_quota.http",
+      "synthetic": true,
       "type": "http",
       "status": 429,
       "errorKind": "quotaExceeded",
@@ -108,6 +121,7 @@
     },
     {
       "file": "openai_400_unsupported_param.http",
+      "synthetic": true,
       "type": "http",
       "status": 400,
       "errorKind": "unsupportedParam",
@@ -116,6 +130,7 @@
     },
     {
       "file": "openai_400_unsupported_value.http",
+      "synthetic": true,
       "type": "http",
       "status": 400,
       "errorKind": "unsupportedParam",
@@ -124,6 +139,7 @@
     },
     {
       "file": "openai_500.http",
+      "synthetic": true,
       "type": "http",
       "status": 500,
       "errorKind": "server",
@@ -132,6 +148,7 @@
     },
     {
       "file": "openai_503_html.http",
+      "synthetic": true,
       "type": "http",
       "status": 503,
       "errorKind": "server",
@@ -140,6 +157,7 @@
     },
     {
       "file": "openrouter_401.http",
+      "synthetic": true,
       "type": "http",
       "status": 401,
       "errorKind": "unauthorized",
@@ -148,6 +166,7 @@
     },
     {
       "file": "openrouter_402.http",
+      "synthetic": true,
       "type": "http",
       "status": 402,
       "errorKind": "quotaExceeded",
@@ -156,6 +175,7 @@
     },
     {
       "file": "openrouter_400_model.http",
+      "synthetic": true,
       "type": "http",
       "status": 400,
       "errorKind": "modelNotFound",
@@ -164,6 +184,7 @@
     },
     {
       "file": "openrouter_429.http",
+      "synthetic": true,
       "type": "http",
       "status": 429,
       "errorKind": "rateLimited",
@@ -172,6 +193,7 @@
     },
     {
       "file": "ollama_404_model.http",
+      "synthetic": true,
       "type": "http",
       "status": 404,
       "errorKind": "modelNotFound",
@@ -180,6 +202,7 @@
     },
     {
       "file": "ollama_404_path.http",
+      "synthetic": true,
       "type": "http",
       "status": 404,
       "errorKind": "endpointNotFound",
