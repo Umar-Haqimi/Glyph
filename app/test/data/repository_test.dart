@@ -141,6 +141,37 @@ void contract(String name, Repos Function() create) {
       ]);
     });
 
+    test('savePosition: lines and completed_plies move together; terminal rows keep NULL scores', () async {
+      final id = (await r.games.save(newGame())).id;
+      await r.analyses.upsert(AnalysisRecord(
+        gameId: id,
+        engine: 'Stockfish 19 light',
+        depth: 12,
+        multipv: 2,
+        status: AnalysisStatus.running,
+        updatedAt: 1,
+      ));
+      PositionLineRecord line(int ply, int rank, {int? cp, int? mate, int depth = 12, String pv = 'e2e4'}) =>
+          PositionLineRecord(gameId: id, ply: ply, rank: rank, scoreCp: cp, scoreMate: mate, depth: depth, pvUci: pv);
+      await r.analyses.savePosition(id, 0, [line(0, 1, cp: 20), line(0, 2, cp: 5)], completedPlies: 1, updatedAt: 10);
+      await r.analyses.savePosition(id, 1, [line(1, 1, cp: -7), line(1, 2, mate: -3)], completedPlies: 2, updatedAt: 11);
+      await r.analyses.savePosition(id, 2, [line(2, 1, depth: 0, pv: '')], completedPlies: 3, updatedAt: 12);
+      // Re-saving a ply replaces its lines.
+      await r.analyses.savePosition(id, 0, [line(0, 1, cp: 22), line(0, 2, cp: 6)], completedPlies: 3, updatedAt: 13);
+
+      final a = (await r.analyses.get(id))!;
+      expect((a.completedPlies, a.updatedAt, a.status), (3, 13, AnalysisStatus.running));
+      final lines = await r.analyses.positionLines(id);
+      expect(lines.map((l) => (l.ply, l.rank, l.scoreCp, l.scoreMate, l.depth)), [
+        (0, 1, 22, null, 12),
+        (0, 2, 6, null, 12),
+        (1, 1, -7, null, 12),
+        (1, 2, null, -3, 12),
+        (2, 1, null, null, 0),
+      ]);
+      expect(lines.last.pvUci, '');
+    });
+
     test('labels round trip', () async {
       final id = (await r.games.save(newGame())).id;
       await r.analyses.putLabels(id, [

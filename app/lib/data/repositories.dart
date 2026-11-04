@@ -20,7 +20,7 @@ abstract interface class GameRepository {
   Future<void> setUserSide(int id, Side? side);
 }
 
-/// Per-game analysis results (the engine pipeline arrives in M3).
+/// Per-game analysis results, written by the engine pipeline.
 abstract interface class AnalysisRepository {
   Future<AnalysisRecord?> get(int gameId);
 
@@ -29,6 +29,18 @@ abstract interface class AnalysisRepository {
   /// Replaces the lines of one position (one transaction), so a ply is either
   /// fully persisted or not at all.
   Future<void> putPositionLines(int gameId, int ply, List<PositionLineRecord> lines);
+
+  /// Persists one analysed position **and** advances `completed_plies` in one
+  /// transaction, so a crash never leaves lines without progress or progress
+  /// without lines. [completedPlies] counts positions (ply + 1 for in-order
+  /// analysis). The `analyses` row must exist (see [upsert]).
+  Future<void> savePosition(
+    int gameId,
+    int ply,
+    List<PositionLineRecord> lines, {
+    required int completedPlies,
+    required int updatedAt,
+  });
 
   /// All lines of a game ordered by (ply, rank).
   Future<List<PositionLineRecord>> positionLines(int gameId);
@@ -56,4 +68,7 @@ abstract final class SettingsKeys {
   static const lichessUsername = 'lichess_username';
   static const chessComUsername = 'chesscom_username';
   static const classifierVersion = 'classifier_version';
+  static const engineDepthPreset = 'engine_depth_preset';
+  static const engineThreads = 'engine_threads';
+  static const engineHashMb = 'engine_hash_mb';
 }

@@ -166,6 +166,33 @@ VALUES (?, ?, ?, ?, ?, ?, ?)''');
   }
 
   @override
+  Future<void> savePosition(
+    int gameId,
+    int ply,
+    List<PositionLineRecord> lines, {
+    required int completedPlies,
+    required int updatedAt,
+  }) async {
+    _db.transaction(() {
+      _db.raw.execute('DELETE FROM position_lines WHERE game_id = ? AND ply = ?', [gameId, ply]);
+      final stmt = _db.raw.prepare('''
+INSERT INTO position_lines (game_id, ply, rank, score_cp, score_mate, depth, pv_uci)
+VALUES (?, ?, ?, ?, ?, ?, ?)''');
+      try {
+        for (final l in lines) {
+          stmt.execute([gameId, ply, l.rank, l.scoreCp, l.scoreMate, l.depth, l.pvUci]);
+        }
+      } finally {
+        stmt.close();
+      }
+      _db.raw.execute(
+        'UPDATE analyses SET completed_plies = ?, updated_at = ? WHERE game_id = ?',
+        [completedPlies, updatedAt, gameId],
+      );
+    });
+  }
+
+  @override
   Future<List<PositionLineRecord>> positionLines(int gameId) async => [
         for (final r in _db.raw.select(
           'SELECT * FROM position_lines WHERE game_id = ? ORDER BY ply, rank',

@@ -1,9 +1,10 @@
 import 'package:glyph_core/glyph_core.dart';
 
+// Defined in glyph_core (the pipeline writes it); re-exported for the app.
+export 'package:glyph_core/glyph_core.dart' show AnalysisStatus;
+
 /// Where a game came from. [name] is the value stored in `games.source`.
 enum GameSource { paste, file, share, lichess, chesscom }
-
-enum AnalysisStatus { running, paused, cancelled, completed, failed }
 
 /// A game about to be saved (no id yet).
 class NewGame {

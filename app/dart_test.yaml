@@ -1,0 +1,4 @@
+tags:
+  device:
+    # Needs an Android device or emulator: flutter test integration_test -d <id>
+    # Not part of `flutter test` (CI runs test/ only).

@@ -107,6 +107,21 @@ class InMemoryAnalysisRepository implements AnalysisRepository {
   }
 
   @override
+  Future<void> savePosition(
+    int gameId,
+    int ply,
+    List<PositionLineRecord> lines, {
+    required int completedPlies,
+    required int updatedAt,
+  }) async {
+    _requireGame(gameId);
+    final a = store.analyses[gameId];
+    if (a == null) throw StateError('no analysis row for game $gameId');
+    await putPositionLines(gameId, ply, lines);
+    store.analyses[gameId] = a.copyWith(completedPlies: completedPlies, updatedAt: updatedAt);
+  }
+
+  @override
   Future<List<PositionLineRecord>> positionLines(int gameId) async {
     final out = [for (final e in store.lines.entries) if (e.key.$1 == gameId) e.value];
     out.sort((a, b) => a.ply != b.ply ? a.ply.compareTo(b.ply) : a.rank.compareTo(b.rank));
