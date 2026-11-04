@@ -52,6 +52,11 @@ abstract interface class AnalysisRepository {
 
   /// Removes lines, labels and the analysis row (for "Re-analyse").
   Future<void> clear(int gameId);
+
+  /// Startup crash recovery: rows still `running` belong to a process that
+  /// was killed mid-job (no job runs yet at startup). Sets them to `paused`
+  /// so the UI offers Resume; returns how many rows changed.
+  Future<int> pauseInterrupted({required int updatedAt});
 }
 
 /// Plain key/value settings. Never holds secrets (SPEC 5.4).

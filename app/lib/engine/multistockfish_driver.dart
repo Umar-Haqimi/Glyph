@@ -17,11 +17,19 @@ class MultistockfishDriver implements EngineDriver {
   /// does not start.
   static Future<MultistockfishDriver> create() async {
     final controller = StreamController<String>.broadcast();
-    final engine = await Stockfish.create(
-      flavor: StockfishFlavor.light,
-      // onStdout is attached before the engine spawns and gets every line.
-      onStdout: controller.add,
-    );
+    final Stockfish engine;
+    try {
+      engine = await Stockfish.create(
+        flavor: StockfishFlavor.light,
+        // onStdout is attached before the engine spawns and gets every line.
+        onStdout: (line) {
+          if (!controller.isClosed) controller.add(line);
+        },
+      );
+    } catch (_) {
+      await controller.close();
+      rethrow;
+    }
     return MultistockfishDriver._(engine, controller);
   }
 

@@ -18,6 +18,7 @@ class AnalysisProgress extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final job = ref.watch(analysisJobProvider);
+    final queued = ref.watch(analysisQueueProvider).contains(game.id);
     final notifier = ref.read(analysisJobProvider.notifier);
     final live = job.gameId == game.id ? job : null;
     final total = game.plyCount + 1;
@@ -59,6 +60,9 @@ class AnalysisProgress extends ConsumerWidget {
         return row(l10n.analysisCancelled(completed, n), actionLabel: l10n.analysisResume, onAction: start);
       case AnalysisPaused(:final completed, total: final n):
         return row(l10n.analysisPaused(completed, n), actionLabel: l10n.analysisResume, onAction: start);
+      case AnalysisFailed(kind: AnalysisFailureKind.invalidGame):
+        // Retrying cannot help: the game itself is unreadable.
+        return row(l10n.analysisFailedInvalid);
       case AnalysisFailed(:final kind):
         return row(
           kind == AnalysisFailureKind.engineUnavailable ? l10n.analysisFailedUnavailable : l10n.analysisFailedCrashed,
@@ -71,9 +75,17 @@ class AnalysisProgress extends ConsumerWidget {
     }
 
     // No live job for this game: queued, or what the database says.
-    if (notifier.isQueued(game.id)) return row(l10n.analysisQueued, busy: true);
+    if (queued) {
+      return row(l10n.analysisQueued, busy: true, actionLabel: l10n.analysisCancel, onAction: () => notifier.cancel(game.id));
+    }
     final stored = game.analysisStatus;
-    if (stored == null) return row(l10n.analysisStarting, busy: true);
+    if (stored == null) {
+      if (notifier.wasCancelledWhileQueued(game.id)) {
+        return row(l10n.analysisCancelled(0, total), actionLabel: l10n.analysisResume, onAction: start);
+      }
+      // Never analysed: the board is about to start it.
+      return row(l10n.analysisStarting, busy: true);
+    }
     return switch (stored) {
       AnalysisStatus.completed => row(l10n.analysisCompleted),
       _ => row(

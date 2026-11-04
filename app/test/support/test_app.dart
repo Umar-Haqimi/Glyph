@@ -13,6 +13,7 @@ import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/l10n/app_localizations_en.dart';
 import 'package:glyph/platform/file_picker_service.dart';
 import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 
 final l10n = AppLocalizationsEn();
 
@@ -37,6 +38,11 @@ class TestEnv {
     FilePickerService? picker,
     OpeningBook? book,
     EngineDriverFactory? driverFactory,
+    this.timeouts = const PipelineTimeouts(
+      handshake: Duration(seconds: 2),
+      stop: Duration(milliseconds: 100),
+      searchIdle: Duration(seconds: 2),
+    ),
   })
       : store = InMemoryStore(),
         settings = InMemorySettingsRepository(settings),
@@ -57,6 +63,7 @@ class TestEnv {
   /// Creates the engine of the app under test (default: a fake that answers
   /// every search with a trivial line).
   final EngineDriverFactory driverFactory;
+  final PipelineTimeouts timeouts;
   int clock = 1000000;
 
   List<Override> get overrides => [
@@ -67,11 +74,7 @@ class TestEnv {
         openingBookProvider.overrideWith((ref) => book),
         nowMsProvider.overrideWithValue(() => clock++),
         engineDriverFactoryProvider.overrideWithValue(driverFactory),
-        pipelineTimeoutsProvider.overrideWithValue(const PipelineTimeouts(
-          handshake: Duration(seconds: 2),
-          stop: Duration(milliseconds: 100),
-          searchIdle: Duration(seconds: 2),
-        )),
+        pipelineTimeoutsProvider.overrideWithValue(timeouts),
       ];
 
   Future<void> pump(WidgetTester tester) async {

@@ -5,10 +5,27 @@ import '../data/repositories.dart';
 
 /// Adapts [AnalysisRepository] (app records) to the pipeline's [AnalysisStore]
 /// (core types).
+///
+/// When a write fails because the game was deleted (foreign key), and
+/// [games] is given, the failure is reported as [GameMissingException] so the
+/// pipeline ends the job quietly instead of reporting an engine crash.
 class RepositoryAnalysisStore implements AnalysisStore {
-  RepositoryAnalysisStore(this._repo);
+  RepositoryAnalysisStore(this._repo, {this.games});
 
   final AnalysisRepository _repo;
+
+  /// Used to tell "game deleted" apart from other write failures.
+  final GameRepository? games;
+
+  Future<T> _write<T>(int gameId, Future<T> Function() op) async {
+    try {
+      return await op();
+    } catch (_) {
+      final games = this.games;
+      if (games != null && await games.get(gameId) == null) throw GameMissingException(gameId);
+      rethrow;
+    }
+  }
 
   @override
   Future<StoredAnalysis?> load(int gameId) async {
@@ -31,18 +48,24 @@ class RepositoryAnalysisStore implements AnalysisStore {
     required int completedPositions,
     required bool clear,
     required int nowMs,
-  }) async {
-    if (clear) await _repo.clear(gameId);
-    await _repo.upsert(AnalysisRecord(
-      gameId: gameId,
-      engine: engine,
-      depth: depth,
-      multipv: multipv,
-      status: AnalysisStatus.running,
-      completedPlies: completedPositions,
-      updatedAt: nowMs,
-    ));
-  }
+  }) =>
+      _write(gameId, () async {
+        // A resume keeps the stored accuracies (M4 fills them in); a fresh
+        // start throws everything away.
+        final existing = clear ? null : await _repo.get(gameId);
+        if (clear) await _repo.clear(gameId);
+        await _repo.upsert(AnalysisRecord(
+          gameId: gameId,
+          engine: engine,
+          depth: depth,
+          multipv: multipv,
+          status: AnalysisStatus.running,
+          completedPlies: completedPositions,
+          whiteAccuracy: existing?.whiteAccuracy,
+          blackAccuracy: existing?.blackAccuracy,
+          updatedAt: nowMs,
+        ));
+      });
 
   @override
   Future<void> savePosition(int gameId, PositionAnalysis position, {required int nowMs}) {
@@ -62,7 +85,8 @@ class RepositoryAnalysisStore implements AnalysisStore {
                 pvUci: l.pv.join(' '),
               ),
           ];
-    return _repo.savePosition(gameId, ply, rows, completedPlies: ply + 1, updatedAt: nowMs);
+    // completed_plies counts positions: position `ply` done -> ply + 1.
+    return _write(gameId, () => _repo.savePosition(gameId, ply, rows, completedPlies: ply + 1, updatedAt: nowMs));
   }
 
   @override

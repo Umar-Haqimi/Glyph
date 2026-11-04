@@ -7,8 +7,6 @@ export 'src/classify/move_label.dart';
 export 'src/engine/analysis_job.dart';
 export 'src/engine/analysis_pipeline.dart';
 export 'src/engine/engine_driver.dart';
-export 'src/engine/fake_engine_driver.dart';
-export 'src/engine/recording_engine_driver.dart';
 export 'src/engine/score.dart';
 export 'src/engine/terminal.dart';
 export 'src/engine/transcript.dart';

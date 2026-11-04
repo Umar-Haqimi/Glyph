@@ -12,6 +12,7 @@
 import 'dart:io';
 
 import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 import 'package:glyph_core/glyph_core_host.dart';
 
 const _dir = 'packages/glyph_core/test/vectors/uci_transcripts';

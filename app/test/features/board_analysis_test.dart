@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/features/board/board_screen.dart';
 import 'package:glyph/l10n/app_localizations.dart';
-import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../support/test_app.dart';
@@ -16,10 +19,10 @@ Future<void> settle(WidgetTester tester, {int rounds = 30}) async {
   }
 }
 
-Future<int> save(TestEnv env, {AnalysisStatus? status, int completed = 0}) async {
+Future<int> save(TestEnv env, {AnalysisStatus? status, int completed = 0, String pgn = _pgn}) async {
   final saved = await env.games.save(NewGame(
     source: GameSource.paste,
-    pgn: _pgn,
+    pgn: pgn,
     white: 'Alice',
     black: 'Bob',
     plyCount: 8,
@@ -39,12 +42,14 @@ Future<int> save(TestEnv env, {AnalysisStatus? status, int completed = 0}) async
   return saved.id;
 }
 
-Future<void> pumpBoard(WidgetTester tester, TestEnv env, int id) async {
+Future<void> pumpBoard(WidgetTester tester, TestEnv env, int id, {ProviderContainer? container}) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final container = ProviderContainer(overrides: env.overrides);
-  addTearDown(container.dispose);
+  if (container == null) {
+    container = ProviderContainer(overrides: env.overrides);
+    addTearDown(container.dispose);
+  }
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
@@ -176,5 +181,44 @@ void main() {
     await settle(tester);
     expect(status(tester), l10n.analysisCompleted);
     expect(fakes, hasLength(2));
+  });
+
+  testWidgets('a queued job has Cancel; cancelling it shows "cancelled" with Resume', (tester) async {
+    final fakes = <FakeEngineDriver>[];
+    final env = TestEnv(driverFactory: () async {
+      final f = FakeEngineDriver.permissive();
+      if (fakes.isEmpty) f.holdSearch = 2;
+      fakes.add(f);
+      return f;
+    });
+    final running = await save(env);
+    final queued = await save(env);
+    final container = ProviderContainer(overrides: env.overrides);
+    addTearDown(container.dispose);
+    await container.read(analysisJobProvider.notifier).analyse((await env.games.get(running))!);
+    await pumpBoard(tester, env, queued, container: container);
+    await settle(tester);
+
+    expect(status(tester), l10n.analysisQueued);
+    expect(find.text(l10n.analysisCancel), findsOneWidget);
+    await tester.tap(find.text(l10n.analysisCancel));
+    await settle(tester);
+    expect(status(tester), l10n.analysisCancelled(0, 9));
+    expect(find.text(l10n.analysisResume), findsOneWidget);
+    expect(await env.analyses.get(queued), isNull, reason: 'never started');
+
+    // Not awaited: the stop needs the (fake) clock to advance.
+    unawaited(container.read(analysisJobProvider.notifier).cancel(running));
+    await settle(tester);
+  });
+
+  testWidgets('a game whose PGN does not parse fails at once (no endless "Starting…", no Retry)', (tester) async {
+    final env = TestEnv();
+    final id = await save(env, pgn: 'this is not a game');
+    await pumpBoard(tester, env, id);
+    await settle(tester);
+    expect(status(tester), l10n.analysisFailedInvalid);
+    expect(find.text(l10n.analysisRetry), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 }

@@ -1,6 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glyph/app.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../support/test_app.dart';
@@ -74,11 +78,11 @@ void main() {
     expect(find.text('C60 · Ruy Lopez'), findsOneWidget);
     expect(find.text('½-½'), findsOneWidget);
     expect(find.text('2026-10-01'), findsOneWidget);
-    // Game 3: stopped at 10/40 plies.
-    expect(find.text(l10n.libraryAnalysisPartial(25)), findsOneWidget);
+    // Game 3: stopped at 10 of 41 positions (completed_plies counts positions).
+    expect(find.text(l10n.libraryAnalysisPartial(24)), findsOneWidget);
     expect(find.text(l10n.librarySourceFile), findsOneWidget);
-    // Game 4: running at 20/40.
-    expect(find.text(l10n.libraryAnalysisRunning(50)), findsOneWidget);
+    // Game 4: running at 20 of 41 positions.
+    expect(find.text(l10n.libraryAnalysisRunning(48)), findsOneWidget);
     expect(find.text(l10n.librarySourceShare), findsOneWidget);
     expect(find.text(l10n.libraryEmptyTitle), findsNothing);
   });
@@ -127,5 +131,37 @@ void main() {
     expect(await env.games.get(keep), isNotNull);
     expect(find.textContaining('Erin'), findsOneWidget);
     expect(find.textContaining('Carol'), findsNothing);
+  });
+
+  testWidgets('deleting a game whose analysis is running cancels the job first', (tester) async {
+    final fakes = <FakeEngineDriver>[];
+    final env = TestEnv(driverFactory: () async {
+      final f = FakeEngineDriver.permissive()..holdSearch = 1;
+      fakes.add(f);
+      return f;
+    }, timeouts: const PipelineTimeouts(searchIdle: Duration(minutes: 1), stop: Duration(milliseconds: 100)));
+    final id = await env.seed(white: 'Carol', black: 'Dave', plyCount: 1);
+    await env.pump(tester);
+    final container = ProviderScope.containerOf(tester.element(find.byType(GlyphApp)));
+    final states = <AnalysisJobState>[];
+    container.read(engineServiceProvider).states.listen(states.add);
+    await container.read(analysisJobProvider.notifier).analyse((await env.games.get(id))!);
+    for (var i = 0; i < 20 && (fakes.isEmpty || fakes.first.goCount == 0); i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(fakes.single.goCount, 1);
+
+    await tester.drag(find.textContaining('Carol'), const Offset(600, 0));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(fakes.single.sent, contains('stop'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 10)); // bestmove, then the delete
+    }
+    expect(await env.games.get(id), isNull);
+    expect(await env.analyses.get(id), isNull);
+    expect(states.whereType<AnalysisFailed>(), isEmpty);
+    expect(states.last, isA<AnalysisCancelled>());
   });
 }

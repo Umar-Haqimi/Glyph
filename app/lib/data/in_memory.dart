@@ -144,6 +144,18 @@ class InMemoryAnalysisRepository implements AnalysisRepository {
   }
 
   @override
+  Future<int> pauseInterrupted({required int updatedAt}) async {
+    var n = 0;
+    for (final e in store.analyses.entries.toList()) {
+      if (e.value.status == AnalysisStatus.running) {
+        store.analyses[e.key] = e.value.copyWith(status: AnalysisStatus.paused, updatedAt: updatedAt);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  @override
   Future<void> clear(int gameId) async {
     store.analyses.remove(gameId);
     store.lines.removeWhere((k, _) => k.$1 == gameId);

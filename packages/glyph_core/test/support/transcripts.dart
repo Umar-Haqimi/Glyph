@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 
 const transcriptDir = 'test/vectors/uci_transcripts';
 

@@ -240,6 +240,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?)''');
       ];
 
   @override
+  Future<int> pauseInterrupted({required int updatedAt}) async {
+    _db.raw.execute(
+      "UPDATE analyses SET status = 'paused', updated_at = ? WHERE status = 'running'",
+      [updatedAt],
+    );
+    return _db.raw.updatedRows;
+  }
+
+  @override
   Future<void> clear(int gameId) async {
     _db.transaction(() {
       _db.raw.execute('DELETE FROM position_lines WHERE game_id = ?', [gameId]);

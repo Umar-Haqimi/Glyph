@@ -13,7 +13,8 @@ import 'engine_service.dart';
 import 'multistockfish_driver.dart';
 import 'repository_analysis_store.dart';
 
-/// How engines are created. Tests override it with `FakeEngineDriver`.
+/// How engines are created. Tests override it with `FakeEngineDriver`
+/// (`package:glyph_core/testing.dart`).
 final engineDriverFactoryProvider = Provider<EngineDriverFactory>((ref) => MultistockfishDriver.create);
 
 /// Timeouts of the pipeline. Tests shorten them.
@@ -25,7 +26,10 @@ final engineServiceProvider = Provider<EngineService>((ref) {
   final now = ref.watch(nowMsProvider);
   final service = EngineService(
     driverFactory: ref.watch(engineDriverFactoryProvider),
-    store: RepositoryAnalysisStore(ref.watch(analysisRepositoryProvider)),
+    store: RepositoryAnalysisStore(
+      ref.watch(analysisRepositoryProvider),
+      games: ref.watch(gameRepositoryProvider),
+    ),
     clock: _FunctionClock(now),
     timeouts: ref.watch(pipelineTimeoutsProvider),
   );
@@ -100,6 +104,10 @@ final engineSettingsProvider = FutureProvider<EngineSettings>(
 class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
   late EngineService _service;
 
+  /// Games whose queued (never started) job was cancelled in this session,
+  /// so the UI can show "cancelled" instead of waiting for a start.
+  final Set<int> _cancelledWhileQueued = {};
+
   @override
   AnalysisJobState build() {
     _service = ref.watch(engineServiceProvider);
@@ -120,25 +128,61 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
 
   bool isQueued(int gameId) => _service.isQueued(gameId);
 
+  bool wasCancelledWhileQueued(int gameId) => _cancelledWhileQueued.contains(gameId);
+
   /// Starts (or resumes, from the stored `completed_plies`) the analysis of
-  /// [game]. [restart] throws the stored progress away.
+  /// [game]. [restart] throws the stored progress away. A game whose stored
+  /// PGN cannot be read ends in `failed(invalidGame)` right away.
   Future<void> analyse(GameRecord game, {bool restart = false}) async {
-    final settings = await ref.read(engineSettingsProvider.future);
-    final parsed = parsePgn(game.pgn);
-    if (parsed.games.isEmpty) return;
-    _service.enqueue(AnalysisRequest.fromGame(
-      game.id,
-      parsed.games.first,
-      depth: settings.depth,
-      multipv: EngineDefaults.multiPv,
-      threads: settings.threads,
-      hashMb: settings.hashMb,
-      engineName: EngineDefaults.engineName,
-      restart: restart,
-    ));
+    _cancelledWhileQueued.remove(game.id);
+    final AnalysisRequest request;
+    try {
+      final settings = await ref.read(engineSettingsProvider.future);
+      final parsed = parsePgn(game.pgn);
+      if (parsed.games.isEmpty) {
+        _failInvalid(game, 'the stored PGN has no readable game');
+        return;
+      }
+      request = AnalysisRequest.fromGame(
+        game.id,
+        parsed.games.first,
+        depth: settings.depth,
+        multipv: EngineDefaults.multiPv,
+        threads: settings.threads,
+        hashMb: settings.hashMb,
+        engineName: EngineDefaults.engineName,
+        restart: restart,
+      );
+    } catch (e) {
+      // Settings could not be read: offer Retry rather than spin forever.
+      state = AnalysisFailed(game.id, AnalysisFailureKind.engineUnavailable, '$e', 0, game.plyCount + 1);
+      return;
+    }
+    _service.enqueue(request);
   }
 
-  Future<void> cancel(int gameId) => _service.cancel(gameId);
+  void _failInvalid(GameRecord game, String message) {
+    // Only the UI state: there is no job, so nothing is written.
+    state = AnalysisFailed(game.id, AnalysisFailureKind.invalidGame, message, 0, game.plyCount + 1);
+  }
+
+  Future<void> cancel(int gameId) {
+    if (_service.isQueued(gameId)) _cancelledWhileQueued.add(gameId);
+    return _service.cancel(gameId);
+  }
 }
 
 final analysisJobProvider = NotifierProvider<AnalysisJobNotifier, AnalysisJobState>(AnalysisJobNotifier.new);
+
+/// Game ids waiting in the engine queue; rebuilds whoever shows "Queued".
+class AnalysisQueueNotifier extends Notifier<List<int>> {
+  @override
+  List<int> build() {
+    final service = ref.watch(engineServiceProvider);
+    final sub = service.queueChanges.listen((ids) => state = ids);
+    ref.onDispose(sub.cancel);
+    return service.queuedGameIds;
+  }
+}
+
+final analysisQueueProvider = NotifierProvider<AnalysisQueueNotifier, List<int>>(AnalysisQueueNotifier.new);

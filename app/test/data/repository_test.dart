@@ -98,6 +98,30 @@ void contract(String name, Repos Function() create) {
       expect((await r.games.get(id))!.userSide, isNull);
     });
 
+    test('pauseInterrupted: rows left running by a killed process become paused', () async {
+      AnalysisRecord rec(int id, AnalysisStatus status) => AnalysisRecord(
+            gameId: id,
+            engine: 'Stockfish',
+            depth: 16,
+            multipv: 2,
+            status: status,
+            completedPlies: 7,
+            updatedAt: 1,
+          );
+      final running = (await r.games.save(newGame(white: 'r'))).id;
+      final done = (await r.games.save(newGame(white: 'd'))).id;
+      final cancelled = (await r.games.save(newGame(white: 'c'))).id;
+      await r.analyses.upsert(rec(running, AnalysisStatus.running));
+      await r.analyses.upsert(rec(done, AnalysisStatus.completed));
+      await r.analyses.upsert(rec(cancelled, AnalysisStatus.cancelled));
+      expect(await r.analyses.pauseInterrupted(updatedAt: 99), 1);
+      final a = (await r.analyses.get(running))!;
+      expect((a.status, a.completedPlies, a.updatedAt), (AnalysisStatus.paused, 7, 99));
+      expect((await r.analyses.get(done))!.status, AnalysisStatus.completed);
+      expect((await r.analyses.get(cancelled))!.status, AnalysisStatus.cancelled);
+      expect(await r.analyses.pauseInterrupted(updatedAt: 100), 0);
+    });
+
     test('analysis summary shows up on the game', () async {
       final id = (await r.games.save(newGame())).id;
       await r.analyses.upsert(AnalysisRecord(
@@ -110,7 +134,8 @@ void contract(String name, Repos Function() create) {
         updatedAt: 5,
       ));
       var g = (await r.games.get(id))!;
-      expect((g.analysisStatus, g.completedPlies, g.analysisProgress), (AnalysisStatus.running, 1, 0.5));
+      expect((g.analysisStatus, g.completedPlies), (AnalysisStatus.running, 1));
+      expect(g.analysisProgress, closeTo(1 / 3, 1e-9), reason: '1 of 3 positions (2 plies)');
       final done = (await r.analyses.get(id))!.copyWith(
         status: AnalysisStatus.completed,
         completedPlies: 2,

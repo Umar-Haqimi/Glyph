@@ -152,12 +152,28 @@ class GameRecord extends NewGame {
 
   /// Null = never analysed.
   final AnalysisStatus? analysisStatus;
+
+  /// `analyses.completed_plies`: the number of **positions** fully persisted,
+  /// counting the start position as position 0. It runs from 0 to
+  /// `plyCount + 1` (a game of N plies has N + 1 positions).
   final int completedPlies;
   final double? whiteAccuracy;
   final double? blackAccuracy;
 
-  /// Share of plies analysed, 0..1.
-  double get analysisProgress => plyCount == 0 ? 0 : (completedPlies / plyCount).clamp(0, 1).toDouble();
+  /// Positions to analyse: the start position plus one per ply.
+  int get totalPositions => plyCount + 1;
+
+  /// Share of positions analysed, 0..1. Exactly 1 only for a completed
+  /// analysis; anything unfinished stays strictly below 1 (and below 0.99 in
+  /// whole percent: callers floor), so "100%" never shows before the end.
+  double get analysisProgress {
+    if (analysisStatus == AnalysisStatus.completed) return 1;
+    final ratio = (completedPlies / totalPositions).clamp(0.0, 1.0);
+    return ratio >= 1 ? 0.99 : ratio;
+  }
+
+  /// [analysisProgress] in whole percent, floored (99 at most until done).
+  int get analysisPercent => analysisStatus == AnalysisStatus.completed ? 100 : (analysisProgress * 100).floor().clamp(0, 99);
 
   GameRecord withUserSide(Side? side) => GameRecord(
         id: id,

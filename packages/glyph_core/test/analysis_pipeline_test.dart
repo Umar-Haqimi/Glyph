@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:dartchess/dartchess.dart' show Chess, Position, Rule, Setup, kInitialFEN;
+import 'package:dartchess/dartchess.dart' show Chess, Position, Rule, Setup, Square, kInitialFEN;
 import 'package:glyph_core/glyph_core.dart';
+import 'package:glyph_core/testing.dart';
 import 'package:test/test.dart';
 
 import 'support/transcripts.dart';
@@ -545,7 +546,258 @@ void main() {
       await pipeline.dispose();
     });
   });
+  group('stop races (review fixes)', () {
+    test('cancel then pause before the stop finished: cancel wins', () async {
+      final fake = fakeFor('italian_castle')..holdSearch = 3;
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(() async => fake, store);
+      final run = pipeline.analyze(requestFor(transcriptGame('italian_castle')));
+      await fake.waitForGo(3);
+      final cancel = pipeline.cancel();
+      final pause = pipeline.pause();
+      await Future.wait([cancel, pause]);
+      expect(await run, isA<AnalysisCancelled>());
+      expect(store.analyses[1]!.status, AnalysisStatus.cancelled);
+      expect(fake.disposed, isTrue, reason: 'the pause still releases the engine');
+      await pipeline.dispose();
+    });
+
+    test('pause then cancel before the stop finished: cancel wins', () async {
+      final fake = fakeFor('italian_castle')..holdSearch = 3;
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(() async => fake, store);
+      final run = pipeline.analyze(requestFor(transcriptGame('italian_castle')));
+      await fake.waitForGo(3);
+      final pause = pipeline.pause();
+      final cancel = pipeline.cancel();
+      await Future.wait([cancel, pause]);
+      expect(await run, isA<AnalysisCancelled>());
+      expect(store.analyses[1]!.status, AnalysisStatus.cancelled);
+      await pipeline.dispose();
+    });
+
+    test('a cancel racing an idle timeout reports cancelled, not failed', () async {
+      // The engine goes silent after `go`; the idle watchdog fires, and the
+      // user cancels while the hung engine is being disposed.
+      final inner = fakeFor('italian_castle')
+        ..holdSearch = 1
+        ..holdLines = 0;
+      final slow = _SlowDisposeDriver(inner, const Duration(milliseconds: 300));
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(
+        () async => slow,
+        store,
+        timeouts: const PipelineTimeouts(
+          handshake: Duration(seconds: 2),
+          stop: Duration(milliseconds: 100),
+          searchIdle: Duration(milliseconds: 50),
+        ),
+      );
+      final run = pipeline.analyze(requestFor(transcriptGame('italian_castle')));
+      await inner.waitForGo(1);
+      await Future<void>.delayed(const Duration(milliseconds: 150)); // idle fired, disposing
+      expect(slow.disposeStarted, isTrue);
+      await pipeline.cancel();
+      expect(await run, isA<AnalysisCancelled>());
+      expect(store.analyses[1]!.status, AnalysisStatus.cancelled);
+      await pipeline.dispose();
+    });
+
+    test('a paused job has released its engine before analyze returns; the next job never overlaps it', () async {
+      final live = <_SlowDisposeDriver>[];
+      var created = 0;
+      final pipeline = pipelineWith(() async {
+        if (live.any((d) => !d.disposeFinished)) throw StateError('A light engine is already live.');
+        final inner = fakeFor('queens_gambit');
+        if (created++ == 0) inner.holdSearch = 3;
+        final d = _SlowDisposeDriver(inner, const Duration(milliseconds: 80));
+        live.add(d);
+        return d;
+      }, InMemoryAnalysisStore());
+      final game = transcriptGame('queens_gambit');
+      final run = pipeline.analyze(requestFor(game));
+      while (live.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      await live.first.inner.waitForGo(3);
+      unawaited(pipeline.pause());
+      expect(await run, isA<AnalysisPaused>());
+      expect(live.first.disposeFinished, isTrue);
+      expect(await pipeline.analyze(requestFor(game)), isA<AnalysisCompleted>());
+      expect(pipeline.enginesCreated, 2);
+      await pipeline.dispose();
+    });
+  });
+
+  group('engine creation', () {
+    test('a factory that never answers: failed(EngineUnavailable) after engineStart; a late engine is disposed', () async {
+      final late = Completer<EngineDriver>();
+      final fake = fakeFor('stalemate');
+      final pipeline = pipelineWith(
+        () => late.future,
+        InMemoryAnalysisStore(),
+        timeouts: const PipelineTimeouts(engineStart: Duration(milliseconds: 50)),
+      );
+      final failed = await pipeline.analyze(requestFor(transcriptGame('stalemate')));
+      expect((failed as AnalysisFailed).kind, AnalysisFailureKind.engineUnavailable);
+      late.complete(fake);
+      await Future<void>.delayed(Duration.zero);
+      expect(fake.disposed, isTrue);
+      await pipeline.dispose();
+    });
+
+    test('cancel while the engine is starting returns at once', () async {
+      final late = Completer<EngineDriver>();
+      final fake = fakeFor('stalemate');
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(() => late.future, store);
+      final run = pipeline.analyze(requestFor(transcriptGame('stalemate')));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await pipeline.cancel().timeout(const Duration(seconds: 1));
+      expect(await run, isA<AnalysisCancelled>());
+      expect(store.analyses[1]!.status, AnalysisStatus.cancelled);
+      late.complete(fake);
+      await Future<void>.delayed(Duration.zero);
+      expect(fake.disposed, isTrue, reason: 'one engine per flavor: the abandoned one must go');
+      await pipeline.dispose();
+    });
+  });
+
+  group('vanished game', () {
+    test('the store reports the game deleted mid-job: cancelled, not engineCrashed', () async {
+      final store = _DeletingStore(deleteAtPly: 2);
+      final fake = fakeFor('queens_gambit');
+      final pipeline = pipelineWith(() async => fake, store);
+      final result = await pipeline.analyze(requestFor(transcriptGame('queens_gambit')));
+      expect(result, isA<AnalysisCancelled>());
+      expect(result.completed, 2);
+      expect(fake.disposed, isFalse, reason: 'the engine is fine and kept for the next job');
+      await pipeline.dispose();
+    });
+
+    test('an illegal move in the request is invalidGame', () async {
+      final pipeline = pipelineWith(() async => FakeEngineDriver(Transcript()), InMemoryAnalysisStore());
+      final failed = await pipeline.analyze(const AnalysisRequest(gameId: 1, startFen: kInitialFEN, moves: ['e2e5'], depth: 4));
+      expect((failed as AnalysisFailed).kind, AnalysisFailureKind.invalidGame);
+      await pipeline.dispose();
+    });
+  });
+
+  group('move encodings through the pipeline (scripted engine)', () {
+    List<String> out(String best) => ['info depth 4 multipv 1 score cp 10 pv $best', 'bestmove $best'];
+
+    test('Chess960 start FEN: castling is sent king-to-rook with UCI_Chess960 on', () async {
+      // King on b1/b8, rooks on a- and h-files: O-O is b1h1, O-O-O is b8a8.
+      const fen = 'rk5r/pppppppp/8/8/8/8/PPPPPPPP/RK5R w HAha - 0 1';
+      final t = Transcript()
+        ..add('position fen $fen', 'go depth 4', out('b1h1'))
+        ..add('position fen $fen moves b1h1', 'go depth 4', out('b8a8'))
+        ..add('position fen $fen moves b1h1 b8a8', 'go depth 4', out('a2a3'));
+      final fake = FakeEngineDriver(t);
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(() async => fake, store);
+      final result = await pipeline.analyze(const AnalysisRequest(gameId: 1, startFen: fen, moves: ['b1h1', 'b8a8'], depth: 4));
+      expect(result, isA<AnalysisCompleted>());
+      expect(fake.sent, contains('setoption name UCI_Chess960 value true'));
+      expect(positionCommands(fake).last, 'position fen $fen moves b1h1 b8a8');
+      // The replayed position really castled: king g1, rook f1; king c8, rook d8.
+      final last = replayPositions(fen, const ['b1h1', 'b8a8']).last;
+      expect(last.board.kingOf(Side.white), Square.g1);
+      expect(last.board.kingOf(Side.black), Square.c8);
+      expect(store.positions, hasLength(3));
+      await pipeline.dispose();
+    });
+
+    test('en passant is sent as the pawn move and replays', () async {
+      const moves = ['e2e4', 'a7a6', 'e4e5', 'd7d5', 'e5d6'];
+      final t = Transcript();
+      for (var i = 0; i <= moves.length; i++) {
+        t.add(positionCommand(kInitialFEN, moves, i), 'go depth 4', out('a2a3'));
+      }
+      final fake = FakeEngineDriver(t);
+      final pipeline = pipelineWith(() async => fake, InMemoryAnalysisStore());
+      final result = await pipeline.analyze(const AnalysisRequest(gameId: 1, startFen: kInitialFEN, moves: moves, depth: 4));
+      expect(result, isA<AnalysisCompleted>());
+      expect(positionCommands(fake).last, 'position startpos moves e2e4 a7a6 e4e5 d7d5 e5d6');
+      final last = replayPositions(kInitialFEN, moves).last;
+      expect(last.board.pieceAt(Square.d5), isNull, reason: 'the d5 pawn was taken en passant');
+      await pipeline.dispose();
+    });
+
+    test('underpromotion: rook is sent as a7a8r; knight ending is terminal (no engine call)', () async {
+      const fen = '8/P6k/8/8/8/8/8/K7 w - - 0 1';
+      final t = Transcript()
+        ..add('position fen $fen', 'go depth 4', out('a7a8q'))
+        ..add('position fen $fen moves a7a8r', 'go depth 4', out('h7g6'));
+      final fake = FakeEngineDriver(t);
+      final store = InMemoryAnalysisStore();
+      final pipeline = pipelineWith(() async => fake, store);
+      expect(
+        await pipeline.analyze(const AnalysisRequest(gameId: 1, startFen: fen, moves: ['a7a8r'], depth: 4)),
+        isA<AnalysisCompleted>(),
+      );
+      expect(positionCommands(fake).last, 'position fen $fen moves a7a8r');
+      await pipeline.dispose();
+
+      // a8=N leaves K+N vs K: insufficient material, stored without the engine.
+      final fake2 = FakeEngineDriver(Transcript()..add('position fen $fen', 'go depth 4', out('a7a8q')));
+      final store2 = InMemoryAnalysisStore();
+      final p2 = pipelineWith(() async => fake2, store2);
+      expect(
+        await p2.analyze(const AnalysisRequest(gameId: 1, startFen: fen, moves: ['a7a8n'], depth: 4)),
+        isA<AnalysisCompleted>(),
+      );
+      expect(goCommands(fake2), hasLength(1));
+      expect(store2.positions[(1, 1)]!.terminal!.kind, TerminalKind.insufficientMaterial);
+      await p2.dispose();
+    });
+  });
 }
+
+/// Wraps a fake and makes `dispose` take [delay].
+class _SlowDisposeDriver implements EngineDriver {
+  _SlowDisposeDriver(this.inner, this.delay);
+
+  final FakeEngineDriver inner;
+  final Duration delay;
+  bool disposeStarted = false;
+  bool disposeFinished = false;
+
+  @override
+  Stream<String> get lines => inner.lines;
+
+  @override
+  void send(String command) => inner.send(command);
+
+  @override
+  Future<void> dispose() async {
+    if (disposeStarted) return;
+    disposeStarted = true;
+    await Future<void>.delayed(delay);
+    await inner.dispose();
+    disposeFinished = true;
+  }
+}
+
+/// Behaves as if the game was deleted right before position [deleteAtPly]
+/// is written.
+class _DeletingStore extends InMemoryAnalysisStore {
+  _DeletingStore({required this.deleteAtPly});
+
+  final int deleteAtPly;
+
+  @override
+  Future<void> savePosition(int gameId, PositionAnalysis position, {required int nowMs}) async {
+    if (position.ply >= deleteAtPly) throw GameMissingException(gameId);
+    await super.savePosition(gameId, position, nowMs: nowMs);
+  }
+
+  @override
+  Future<void> end(int gameId, AnalysisStatus status, {required int nowMs}) async {
+    fail('end() must not be called for a vanished game');
+  }
+}
+
 
 class _MuteDriver implements EngineDriver {
   bool disposed = false;

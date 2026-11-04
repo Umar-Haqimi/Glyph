@@ -1,21 +1,29 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
+import '../../engine/engine_providers.dart';
+import '../../engine/engine_service.dart';
 
 /// The library list. A swipe-to-delete hides the game at once and only deletes
 /// it for real when the undo window closes ([commitDelete]).
 class LibraryController extends AsyncNotifier<List<GameRecord>> {
   List<GameRecord> _all = const [];
   final Set<int> _pendingDelete = {};
+  late EngineService _engine;
 
   @override
   Future<List<GameRecord>> build() async {
     final repo = ref.read(gameRepositoryProvider);
+    // Captured here: Ref.read is not allowed inside onDispose.
+    _engine = ref.read(engineServiceProvider);
+    final engine = _engine;
     ref.onDispose(() {
       // Make swipes that were never undone permanent when the app tears down.
       for (final id in _pendingDelete.toList()) {
-        repo.delete(id);
+        unawaited(engine.cancel(id).whenComplete(() => repo.delete(id)));
       }
     });
     _all = await repo.list();
@@ -45,6 +53,9 @@ class LibraryController extends AsyncNotifier<List<GameRecord>> {
 
   Future<void> commitDelete(int id) async {
     if (!_pendingDelete.remove(id)) return;
+    // Stop its analysis (running or queued) before the rows go away; the
+    // pipeline also copes if a write still races the delete.
+    await _engine.cancel(id);
     await ref.read(gameRepositoryProvider).delete(id);
     _all = [
       for (final g in _all)

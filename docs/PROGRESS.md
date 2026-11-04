@@ -46,3 +46,26 @@ Notes for M3 / M4:
 - `OpeningBook.annotate(game)` returns `bookPlies` (contiguous prefix) and the deepest named opening. chess-openings only lists named positions, so an ordinary Ruy Lopez leaves the prefix after 3...a6 (4.Ba4 Nf6 are unlisted) while a later move is named again; if that is too stingy for the Book label, extend the asset with intermediate positions in M4 (the SHA test then needs updating).
 - `SettingsKeys.lichessUsername` / `chessComUsername` feed `detectUserSide` at import time; the Settings UI for them is still to come.
 - `GameRepository.setUserSide` exists for the per-game override (UI in M5).
+
+## M3 — Engine & analysis pipeline: done (host-verified; device checks pending)
+
+Done:
+- `glyph_core/engine/`: `UciParser` (bounds, `currmove`, `info string`, interleaved MultiPV, `mate 0`, `bestmove (none)`), `WhiteScore` / `toWhitePov` (the one POV conversion, trap 1), `detectTerminal` (checkmate, stalemate, insufficient material: never sent to the engine), `EngineDriver` interface + `ProcessEngineDriver` (host, `glyph_core_host.dart`), `Transcript` format, `AnalysisJobState` machine (idle / starting / running / completed / cancelled / paused / failed), `AnalysisPipeline` (session handshake, `UCI_Chess960 true`, `position … moves <full history>`, per-position persistence before the next `go`, cancel = `stop` + await `bestmove` with the 2 s rule, pause, resume from `completed_plies`, crash -> failed, Retry recreates the engine).
+- Test drivers live in `package:glyph_core/testing.dart` (`FakeEngineDriver`, `RecordingEngineDriver`), not in the production export; an app hygiene test asserts `app/lib` never imports it.
+- `tool/record_transcripts.dart` and 8 recorded transcripts (`test/vectors/uci_transcripts/`: italian_castle, queens_gambit, promotion, blunder_white / blunder_black (P0 mirror), repetition, stalemate, mate_opera).
+- App: `MultistockfishDriver` (light flavor), `EngineService` (single owner, serial queue, lifecycle observer, hot-reload guard), `RepositoryAnalysisStore`, engine settings (Fast 12 / Normal 16 / Deep 20, threads `min(4, cores-2)`, Hash 64), board progress row (Starting / Queued + Cancel / Analysing k/N + Cancel / Cancelled, Paused, Unfinished + Resume / Failed + Retry / unreadable game), new games start analysing when their board opens.
+- Review fixes (this pass): resume after pause never restarts (stored request has `restart=false`); pause / resume / cancel serialised (a resume during a still-stopping pause still resumes, never a second engine while the old one disposes, cancel always beats a racing pause); deleting a game cancels its job, and a game that vanishes mid-job ends `cancelled` instead of `engineCrashed`; startup reconciliation of `running` rows to `paused`; engine creation bounded by `PipelineTimeouts.engineStart` (30 s, interruptible by cancel / pause, a late engine is disposed); unreadable PGN -> `failed(invalidGame)` instead of an endless "Starting…"; re-enqueueing the running game with another depth/MultiPV or restart cancels and re-runs it; `begin` without clear keeps stored accuracies; library percentage counts positions and never shows 100% before `completed`; a cancel racing an idle timeout reports `cancelled`.
+- Tests: core 131 (+3 skipped), app 99. Pipeline tests cover cancel mid-search, ignored `stop`, pause, resume, crash/retry, terminal positions, history on every `position`, P0 mirror, Chess960 start FEN (castling sent king-to-rook), en passant, underpromotion (`a7a8r`; `a7a8n` -> insufficient material, no engine call), and the race fixes above.
+
+Deviations / notes:
+- The real-Stockfish tests (`process_engine_test.dart`, 3 tests) are skipped unless `STOCKFISH_PATH` points at a desktop binary; the device test (`app/integration_test/engine_device_test.dart`) needs a device. Neither ran in the cloud container.
+- `flutter build apk --release --split-per-abi` could not be run in the cloud container (no Android SDK), so the release build and `check_permissions.sh` were not re-verified for M3. Run both on the dev machine before tagging.
+- `AnalysisFailureKind.invalidGame` was added (not in SPEC 4): an unparsable stored PGN or an illegal move in the request. It has its own copy and no Retry.
+- `analyses.completed_plies` counts **positions** (start position = 0, up to `plyCount + 1`), not plies; the name is kept from the SPEC schema.
+- A queued job cancelled before it started writes nothing; the board shows "cancelled at 0/N" for the rest of the session.
+
+Notes for M4:
+- Read lines with `AnalysisRepository.positionLines(gameId)`: per ply, rank 1..2, White-POV `score_cp` / `score_mate`, `pv_uci` in dartchess UCI (castling king-to-rook; parse through dartchess with the position, trap 2). A terminal position is one rank-1 row with both scores NULL, depth 0, empty pv: derive checkmate / stalemate / insufficient material from the position (`detectTerminal`).
+- Accuracy goes into `analyses.white_accuracy` / `black_accuracy`; a resumed job preserves them, a restart clears them. Labels go through `putLabels`.
+- Classify only when the analysis is `completed` (`AnalysisJobNotifier` refreshes the game when a job finishes).
+- On-device timings (SPEC 7.3: Normal ≤ 3 min for ~80 plies) and the background / force-stop checklist items are still open in `docs/HARDWARE_TEST.md`.

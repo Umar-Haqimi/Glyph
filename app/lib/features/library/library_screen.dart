@@ -141,7 +141,7 @@ class GameCard extends StatelessWidget {
       };
 
   String _analysis(AppLocalizations l10n) {
-    final percent = (game.analysisProgress * 100).round();
+    final percent = game.analysisPercent;
     return switch (game.analysisStatus) {
       null => l10n.libraryAnalysisNone,
       AnalysisStatus.completed => l10n.libraryAnalysisDone,

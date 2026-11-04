@@ -14,6 +14,22 @@ enum AnalysisFailureKind {
 
   /// The engine died, rejected input or stopped answering mid-job.
   engineCrashed,
+
+  /// The game itself cannot be analysed (its stored PGN does not parse, or a
+  /// move does not replay). Retrying does not help.
+  invalidGame,
+}
+
+/// Thrown by an [AnalysisStore] when the game it is asked to write for no
+/// longer exists (it was deleted while its job was queued or running). The
+/// pipeline ends such a job in `cancelled` without touching the store again.
+class GameMissingException implements Exception {
+  const GameMissingException(this.gameId);
+
+  final int gameId;
+
+  @override
+  String toString() => 'GameMissingException: game $gameId no longer exists';
 }
 
 /// State machine of one analysis job (SPEC section 4):
@@ -260,6 +276,8 @@ abstract interface class AnalysisStore {
   /// one transaction. The pipeline awaits this **before** the next `go`.
   Future<void> savePosition(int gameId, PositionAnalysis position, {required int nowMs});
 
+  /// [begin] and [savePosition] throw [GameMissingException] when the game was
+  /// deleted; [end] is a no-op then.
   Future<void> end(int gameId, AnalysisStatus status, {required int nowMs});
 }
 

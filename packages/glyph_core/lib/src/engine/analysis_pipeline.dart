@@ -15,6 +15,7 @@ class PipelineTimeouts {
     this.handshake = const Duration(seconds: 10),
     this.stop = const Duration(seconds: 2),
     this.searchIdle = const Duration(seconds: 90),
+    this.engineStart = const Duration(seconds: 30),
   });
 
   /// Maximum wait for `uciok` / `readyok`.
@@ -26,6 +27,11 @@ class PipelineTimeouts {
 
   /// A search that produces no output for this long is considered hung.
   final Duration searchIdle;
+
+  /// Maximum wait for the [EngineDriverFactory] to hand over an engine. Past
+  /// it the job fails with `engineUnavailable` (the engine, if it still
+  /// arrives, is disposed at once).
+  final Duration engineStart;
 }
 
 /// The `position ...` command for the position after [moveCount] moves
@@ -73,7 +79,17 @@ class AnalysisPipeline {
 
   bool _running = false;
   _StopReason? _stopReason;
+  Completer<void>? _stopSignal;
   Future<void>? _job;
+
+  /// Disposal of a discarded engine that may still be in progress. A new
+  /// engine is only created after it completed (one engine per flavor, SPEC
+  /// trap 5).
+  Future<void>? _discarding;
+
+  /// An engine creation that was given up on (timeout, cancel, pause); it
+  /// disposes the engine if one still arrives.
+  Future<void>? _abandoned;
 
   /// How many engines were created so far (tests: "retry recreates").
   int enginesCreated = 0;
@@ -97,6 +113,7 @@ class AnalysisPipeline {
     if (_running) throw StateError('AnalysisPipeline is already running a job');
     _running = true;
     _stopReason = null;
+    _stopSignal = Completer<void>();
     final completer = Completer<AnalysisJobState>();
     _job = completer.future.then<void>((_) {}, onError: (Object _) {});
     _run(request).then(completer.complete, onError: completer.completeError);
@@ -114,8 +131,11 @@ class AnalysisPipeline {
 
   Future<void> _stop(_StopReason reason) async {
     if (_running) {
-      // A pause overrides a cancel; never the other way round.
-      if (_stopReason != _StopReason.pause) _stopReason = reason;
+      // A cancel wins over a pause, in either order: a job the user cancelled
+      // must not come back when the app returns to the foreground.
+      if (_stopReason != _StopReason.cancel) _stopReason = reason;
+      final signal = _stopSignal;
+      if (signal != null && !signal.isCompleted) signal.complete();
       _interruptSearch();
       await _job;
     }
@@ -149,7 +169,7 @@ class AnalysisPipeline {
       try {
         positions = replayPositions(req.startFen, req.moves);
       } on ArgumentError catch (e) {
-        return finish(AnalysisFailed(req.gameId, AnalysisFailureKind.engineCrashed, '${e.message}', 0, total));
+        return finish(AnalysisFailed(req.gameId, AnalysisFailureKind.invalidGame, '${e.message}', 0, total));
       }
 
       final stored = await _store.load(req.gameId);
@@ -182,8 +202,11 @@ class AnalysisPipeline {
       if (needsEngine) {
         try {
           session = await _ensureSession(req);
+        } on _Interrupted {
+          return await _stopped(req, completed, total);
         } catch (e) {
           await _discardSession();
+          if (_stopReason != null) return await _stopped(req, completed, total);
           return await _fail(req, AnalysisFailureKind.engineUnavailable, e, completed, total);
         }
         if (_stopReason != null) return await _stopped(req, completed, total);
@@ -236,17 +259,21 @@ class AnalysisPipeline {
         // The engine ignored `stop`: throw it away; the next job recreates it.
         await _discardSession();
         return await _stopped(req, completed, total);
+      } on GameMissingException {
+        return finish(AnalysisCancelled(req.gameId, completed, total));
       } on Object catch (e) {
-        if (_stopReason != null && e is EngineClosedException) {
-          await _discardSession();
-          return await _stopped(req, completed, total);
-        }
         await _discardSession();
+        // A cancel or pause that raced the failure wins (the engine closed
+        // because of the stop, an idle timeout fired just before it, ...).
+        if (_stopReason != null) return await _stopped(req, completed, total);
         return await _fail(req, AnalysisFailureKind.engineCrashed, e, completed, total);
       }
 
       await _store.end(req.gameId, AnalysisStatus.completed, nowMs: _clock.nowMs());
       return finish(AnalysisCompleted(req.gameId, total));
+    } on GameMissingException {
+      // The game was deleted: nothing to record, nothing to resume.
+      return finish(AnalysisCancelled(req.gameId, completed, total));
     } catch (e) {
       // Store failures and other surprises: a failed job, never a thrown error.
       await _discardSession();
@@ -254,11 +281,15 @@ class AnalysisPipeline {
     } finally {
       _running = false;
       _stopReason = null;
+      _stopSignal = null;
     }
   }
 
   Future<AnalysisJobState> _stopped(AnalysisRequest req, int completed, int total) async {
     final paused = _stopReason == _StopReason.pause;
+    // A paused job releases its engine before it reports, so whatever runs
+    // next (a resume) never meets the old engine still alive.
+    if (paused) await _discardSession();
     await _store.end(
       req.gameId,
       paused ? AnalysisStatus.paused : AnalysisStatus.cancelled,
@@ -298,7 +329,7 @@ class AnalysisPipeline {
       session = null;
     }
     if (session == null) {
-      final driver = await _createDriver();
+      final driver = await _startEngine();
       enginesCreated++;
       session = _Session(driver);
       _session = session;
@@ -320,11 +351,57 @@ class AnalysisPipeline {
     return session;
   }
 
-  Future<void> _discardSession() async {
+  /// Creates an engine, bounded by [PipelineTimeouts.engineStart] and
+  /// interruptible by cancel / pause (throws [_Interrupted]). Waits first for
+  /// any engine that is still being disposed.
+  Future<EngineDriver> _startEngine() async {
+    final discarding = _discarding;
+    if (discarding != null) await discarding;
+    final abandoned = _abandoned;
+    if (abandoned != null) {
+      // Bounded: a factory that never completes must not block every later job.
+      await abandoned.timeout(timeouts.engineStart, onTimeout: () {});
+    }
+    if (_stopReason != null) throw const _Interrupted();
+
+    final pending = _createDriver();
+    final stop = _stopSignal?.future ?? Completer<void>().future;
+    final EngineDriver? driver;
+    try {
+      driver = await Future.any<EngineDriver?>([pending, stop.then((_) => null)]).timeout(timeouts.engineStart);
+    } on TimeoutException {
+      _abandon(pending);
+      throw EngineTimeoutException('the engine did not start within ${timeouts.engineStart.inSeconds} s');
+    }
+    if (driver == null) {
+      _abandon(pending);
+      throw const _Interrupted();
+    }
+    return driver;
+  }
+
+  void _abandon(Future<EngineDriver> pending) {
+    final f = pending.then((d) => d.dispose(), onError: (Object _) {}).catchError((Object _) {});
+    _abandoned = f;
+    unawaited(f.whenComplete(() {
+      if (identical(_abandoned, f)) _abandoned = null;
+    }));
+  }
+
+  /// Drops the current engine. The returned future (also kept in
+  /// [_discarding]) completes when the engine has been disposed.
+  Future<void> _discardSession() {
     final s = _session;
     _session = null;
     _configured = null;
-    if (s != null) await s.dispose();
+    if (s == null) return _discarding ?? Future<void>.value();
+    final previous = _discarding;
+    final f = Future.wait([?previous, s.dispose()]).then((_) {});
+    _discarding = f;
+    unawaited(f.whenComplete(() {
+      if (identical(_discarding, f)) _discarding = null;
+    }));
+    return f;
   }
 
   /// `stop` the in-flight search, if any; arm the stop timeout.
@@ -338,6 +415,11 @@ enum _StopReason { cancel, pause }
 
 class _StopTimeout implements Exception {
   const _StopTimeout();
+}
+
+/// Engine creation was interrupted by a cancel or pause.
+class _Interrupted implements Exception {
+  const _Interrupted();
 }
 
 /// One live engine and the line plumbing around it. One request is in flight

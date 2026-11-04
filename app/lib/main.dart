@@ -14,11 +14,15 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   final dir = await getApplicationSupportDirectory();
   final db = Db.open('${dir.path}/glyph.db');
+  final analyses = SqliteAnalysisRepository(db);
+  // Crash recovery: no job runs yet, so `running` rows were left by a killed
+  // process. Make them `paused` (Resume continues at completed_plies).
+  await analyses.pauseInterrupted(updatedAt: DateTime.now().millisecondsSinceEpoch);
   runApp(
     ProviderScope(
       overrides: [
         gameRepositoryProvider.overrideWithValue(SqliteGameRepository(db)),
-        analysisRepositoryProvider.overrideWithValue(SqliteAnalysisRepository(db)),
+        analysisRepositoryProvider.overrideWithValue(analyses),
         settingsRepositoryProvider.overrideWithValue(SqliteSettingsRepository(db)),
       ],
       child: const EngineReloadGuard(child: GlyphApp()),

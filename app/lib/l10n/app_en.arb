@@ -250,6 +250,7 @@
   "analysisCompleted": "Analysis complete",
   "analysisFailedUnavailable": "The engine couldn't start.",
   "analysisFailedCrashed": "The engine stopped unexpectedly.",
+  "analysisFailedInvalid": "This game's moves couldn't be read, so it can't be analysed.",
   "analysisCancel": "Cancel",
   "analysisResume": "Resume",
   "analysisRetry": "Retry"
