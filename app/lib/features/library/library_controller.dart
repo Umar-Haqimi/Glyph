@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../engine/engine_providers.dart';
 import '../../engine/engine_service.dart';
+import '../explain/summary_controller.dart';
 
 /// The library list. A swipe-to-delete hides the game at once and only deletes
 /// it for real when the undo window closes ([commitDelete]).
@@ -68,8 +69,12 @@ class LibraryController extends AsyncNotifier<List<GameRecord>> {
   Future<void> _deleteForGood(int id) async {
     // Stop its analysis (running or queued) before the rows go away; the
     // pipeline also copes if a write still races the delete.
+    // Its summary request goes first (the provider's disposal aborts it), so
+    // nothing is saved for, or shown under, a game that no longer exists.
+    ref.invalidate(summaryProvider(id));
     await _engine.cancel(id);
     await ref.read(gameRepositoryProvider).delete(id);
+    ref.invalidate(summaryProvider(id));
     _all = [
       for (final g in _all)
         if (g.id != id) g,

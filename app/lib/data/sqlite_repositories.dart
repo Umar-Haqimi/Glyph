@@ -318,6 +318,10 @@ class SqliteLlmCacheRepository implements LlmCacheRepository {
   @override
   Future<void> put(CachedLlmText e, {int maxEntries = LlmCacheRepository.defaultMaxEntries}) async {
     _db.transaction(() {
+      // A request that outlives its game (deleted while the answer streamed)
+      // must not leave an orphan row; the FOREIGN KEY would refuse it too.
+      final gameId = e.gameId;
+      if (gameId != null && _db.raw.select('SELECT 1 FROM games WHERE id = ?', [gameId]).isEmpty) return;
       _db.raw.execute(
         'INSERT INTO llm_cache (key, kind, content, model, created_at, game_id) VALUES (?, ?, ?, ?, ?, ?) '
         'ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, content = excluded.content, '

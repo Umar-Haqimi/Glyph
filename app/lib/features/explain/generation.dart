@@ -21,6 +21,7 @@ class GenerationState {
     this.request,
     this.fromCache = false,
     this.cutOff = false,
+    this.filtered = false,
     this.missing,
   });
 
@@ -43,6 +44,10 @@ class GenerationState {
   /// The text ends early: the 32 KB stream cap or the model's token limit.
   final bool cutOff;
 
+  /// The provider's content filter ended the answer (`content_filter`): the
+  /// text so far is shown but never saved.
+  final bool filtered;
+
   /// What the not-configured gate found missing.
   final LlmErrorKind? missing;
 
@@ -55,6 +60,7 @@ class GenerationState {
     LlmRequest? request,
     bool? fromCache,
     bool? cutOff,
+    bool? filtered,
   }) =>
       GenerationState(
         phase: phase ?? this.phase,
@@ -63,6 +69,7 @@ class GenerationState {
         request: request ?? this.request,
         fromCache: fromCache ?? this.fromCache,
         cutOff: cutOff ?? this.cutOff,
+        filtered: filtered ?? this.filtered,
         missing: missing,
       );
 }
@@ -73,14 +80,12 @@ class GenerationState {
 class GenerationRunner {
   GenerationRunner({
     required this.client,
-    required this.readApiKey,
     required this.cache,
     required this.nowMs,
     required this.onChange,
   });
 
   final LlmClient client;
-  final Future<String?> Function() readApiKey;
   final LlmCacheRepository cache;
   final int Function() nowMs;
   final void Function(GenerationState state) onChange;
@@ -100,8 +105,12 @@ class GenerationRunner {
 
   /// Asks the model (or the cache, when [useCache]) and completes when the
   /// request ended in any way.
+  ///
+  /// [readApiKey] must belong to the same settings snapshot that produced
+  /// [request]'s config.
   Future<void> run({
     required LlmRequest request,
+    required Future<String?> Function() readApiKey,
     required String cacheKey,
     required PromptKind kind,
     int? gameId,
@@ -162,8 +171,8 @@ class GenerationRunner {
           ));
           return finish();
         }
-        if (!f.cutOff) {
-          // A complete answer is worth keeping; a cut-off one is not.
+        if (f.complete) {
+          // A complete answer is worth keeping; a cut-off or filtered one is not.
           try {
             await cache.put(CachedLlmText(
               key: cacheKey,
@@ -178,7 +187,7 @@ class GenerationRunner {
           }
         }
         if (id == _generation) {
-          _emit(GenerationState(phase: GenerationPhase.done, text: text, request: request, cutOff: f.cutOff));
+          _emit(GenerationState(phase: GenerationPhase.done, text: text, request: request, cutOff: f.cutOff, filtered: f.filtered));
         }
         finish();
       },

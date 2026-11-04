@@ -4,6 +4,26 @@ import 'package:test/test.dart';
 void main() {
   BaseUrlProblem? problem(String s) => BaseUrlPolicy.check(s).problem;
 
+  group('trailing-dot hosts are refused (the checked host is the connected host)', () {
+    for (final url in [
+      'http://127.0.0.1.:11434/v1',
+      'http://localhost.:1/v1',
+      'http://x.local./v1',
+      'http://nas.lan./v1',
+      'https://api.openai.com./v1',
+      'https://example.com./v1',
+    ]) {
+      test(url, () => expect(BaseUrlPolicy.check(url).ok, isFalse, reason: url));
+    }
+  });
+
+  test('origin spells out the default port and brackets IPv6', () {
+    expect(BaseUrlPolicy.origin(BaseUrlPolicy.check('https://API.OpenAI.com/v1').uri!), 'https://api.openai.com:443');
+    expect(BaseUrlPolicy.origin(BaseUrlPolicy.check('http://localhost/v1').uri!), 'http://localhost:80');
+    expect(BaseUrlPolicy.origin(BaseUrlPolicy.check('http://[::1]:11434/v1').uri!), 'http://[::1]:11434');
+    expect(BaseUrlPolicy.origin(BaseUrlPolicy.check('https://a.com:443/v1/x').uri!), 'https://a.com:443');
+  });
+
   group('https is accepted anywhere', () {
     for (final url in [
       'https://api.openai.com/v1',
@@ -143,7 +163,7 @@ void main() {
   group('isLocalHost', () {
     test('decides key optionality helpers', () {
       expect(BaseUrlPolicy.isLocalHost('localhost'), isTrue);
-      expect(BaseUrlPolicy.isLocalHost('localhost.'), isTrue);
+      expect(BaseUrlPolicy.isLocalHost('localhost.'), isFalse, reason: 'trailing dots are not a local name');
       expect(BaseUrlPolicy.isLocalHost('192.168.0.9'), isTrue);
       expect(BaseUrlPolicy.isLocalHost('api.openai.com'), isFalse);
       expect(BaseUrlPolicy.isLocalHost(''), isFalse);

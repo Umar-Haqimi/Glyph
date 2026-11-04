@@ -22,6 +22,11 @@ void main() {
       expect(Limits.maxLlmStreamBytes, 32 * 1024);
     });
 
+    test('total LLM stream cap is 1 MB, above the 32 KB text cap', () {
+      expect(Limits.maxLlmTotalStreamBytes, 1024 * 1024);
+      expect(Limits.maxLlmTotalStreamBytes, greaterThan(Limits.maxLlmStreamBytes));
+    });
+
     test('SSE event and error body caps', () {
       expect(Limits.maxSseEventBytes, 256 * 1024);
       expect(Limits.maxLlmErrorBodyBytes, 64 * 1024);

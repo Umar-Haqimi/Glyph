@@ -22,7 +22,7 @@ class Db {
 
   /// Migration `i` upgrades `user_version` i to i + 1. Never edit a shipped
   /// migration; append a new one.
-  static final List<void Function(Database db)> migrations = [_v1, _v2];
+  static final List<void Function(Database db)> migrations = [_v1, _v2, _v3];
 
   void _init() {
     raw.execute('PRAGMA foreign_keys = ON');
@@ -36,14 +36,25 @@ class Db {
       throw StateError('Database is newer (v$version) than this app (v$target).');
     }
     while (version < target) {
+      // Foreign keys are off while a migration rebuilds tables (the pragma is
+      // a no-op inside a transaction, so it is set here): dropping `games`
+      // with them on would cascade-delete every child row. Before the commit
+      // `foreign_key_check` must come back empty.
+      raw.execute('PRAGMA foreign_keys = OFF');
       raw.execute('BEGIN');
       try {
         _migrations[version](raw);
+        final violations = raw.select('PRAGMA foreign_key_check');
+        if (violations.isNotEmpty) {
+          throw StateError('Migration ${version + 1} left ${violations.length} foreign key violations.');
+        }
         raw.userVersion = version + 1;
         raw.execute('COMMIT');
       } catch (_) {
         raw.execute('ROLLBACK');
         rethrow;
+      } finally {
+        raw.execute('PRAGMA foreign_keys = ON');
       }
       version++;
     }
@@ -124,5 +135,59 @@ CREATE TABLE llm_cache (
 /// explanations with it (the SPEC 5.4 table has no owner column).
 void _v2(Database db) {
   db.execute('ALTER TABLE llm_cache ADD COLUMN game_id INTEGER');
+  db.execute('CREATE INDEX llm_cache_game ON llm_cache (game_id)');
+}
+
+/// M6 review fix: `games.id` becomes `AUTOINCREMENT`, so the id of a deleted
+/// game is never handed to a new one (per-game state and caches keyed by id
+/// can then never bleed into another game), and `llm_cache.game_id` becomes a
+/// real foreign key (`ON DELETE CASCADE`), so no saved text can outlive, or be
+/// written for, a game that does not exist.
+///
+/// SQLite cannot alter either, so both tables are rebuilt (the documented
+/// "12 steps": create new, copy, drop old, rename, recreate indexes). The
+/// runner switches foreign keys off around the migration and checks
+/// `foreign_key_check` before committing. `sqlite_sequence` starts at the
+/// highest id in use, which is all the old table could guarantee. Orphan
+/// `llm_cache` rows (an unknown `game_id`) are dropped.
+void _v3(Database db) {
+  db.execute('''
+CREATE TABLE games_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL CHECK (source IN ('paste','file','share','lichess','chesscom')),
+  source_id TEXT,
+  pgn TEXT NOT NULL,
+  white TEXT, black TEXT, white_elo INTEGER, black_elo INTEGER,
+  result TEXT, date TEXT, time_control TEXT, event TEXT,
+  variant TEXT NOT NULL DEFAULT 'standard' CHECK (variant IN ('standard','chess960')),
+  start_fen TEXT,
+  eco TEXT, opening_name TEXT,
+  user_side TEXT CHECK (user_side IN ('white','black')),
+  ply_count INTEGER NOT NULL,
+  imported_at INTEGER NOT NULL,
+  UNIQUE (source, source_id)
+)''');
+  db.execute('''
+INSERT INTO games_new (id, source, source_id, pgn, white, black, white_elo, black_elo, result, date,
+  time_control, event, variant, start_fen, eco, opening_name, user_side, ply_count, imported_at)
+SELECT id, source, source_id, pgn, white, black, white_elo, black_elo, result, date,
+  time_control, event, variant, start_fen, eco, opening_name, user_side, ply_count, imported_at
+FROM games''');
+  db.execute('DROP TABLE games');
+  db.execute('ALTER TABLE games_new RENAME TO games');
+
+  db.execute('''
+CREATE TABLE llm_cache_new (
+  key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('move','summary')),
+  content TEXT NOT NULL, model TEXT NOT NULL, created_at INTEGER NOT NULL,
+  game_id INTEGER REFERENCES games(id) ON DELETE CASCADE
+)''');
+  db.execute('''
+INSERT INTO llm_cache_new (key, kind, content, model, created_at, game_id)
+SELECT key, kind, content, model, created_at, game_id FROM llm_cache
+WHERE game_id IS NULL OR game_id IN (SELECT id FROM games)''');
+  db.execute('DROP TABLE llm_cache');
+  db.execute('ALTER TABLE llm_cache_new RENAME TO llm_cache');
   db.execute('CREATE INDEX llm_cache_game ON llm_cache (game_id)');
 }

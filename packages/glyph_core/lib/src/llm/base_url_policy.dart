@@ -101,6 +101,10 @@ abstract final class BaseUrlPolicy {
       return const BaseUrlResult._(problem: BaseUrlProblem.malformed);
     }
     final host = parsed.host.toLowerCase();
+    // `127.0.0.1.` / `localhost.` are accepted by the resolver as the same
+    // name but are a different origin string; refuse them so the host that was
+    // checked is always the host that is connected to.
+    if (host.endsWith('.')) return const BaseUrlResult._(problem: BaseUrlProblem.malformed);
     if (scheme == 'http' && !isLocalHost(host)) {
       return const BaseUrlResult._(problem: BaseUrlProblem.cleartextNotAllowed);
     }
@@ -119,14 +123,20 @@ abstract final class BaseUrlPolicy {
     );
   }
 
+  /// The origin of an accepted base URL as `scheme://host:port` (default
+  /// ports spelled out, IPv6 hosts bracketed). An API key is bound to this.
+  static String origin(Uri base) {
+    final host = base.host.contains(':') ? '[${base.host}]' : base.host;
+    return '${base.scheme}://$host:${base.port}';
+  }
+
   /// The chat completions endpoint for an accepted base URL.
   static Uri chatCompletions(Uri base) => base.replace(path: '${base.path}/chat/completions');
 
   /// True when plain `http://` is acceptable for [host] (and an API key is
   /// optional there): loopback, private ranges, CGNAT, `.local` / `.lan`.
   static bool isLocalHost(String host) {
-    var h = host.toLowerCase();
-    if (h.endsWith('.')) h = h.substring(0, h.length - 1);
+    final h = host.toLowerCase();
     if (h.isEmpty) return false;
     if (h == 'localhost' || h == '::1' || h == '[::1]') return true;
     if (h.endsWith('.local') || h.endsWith('.lan')) return h.length > 4 && h != '.local' && h != '.lan';

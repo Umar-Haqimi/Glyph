@@ -33,11 +33,14 @@ class ExplainNotifier extends Notifier<GenerationState> {
   late GenerationRunner _runner;
   bool _started = false;
 
+  /// Bumped by every [start] and [cancel]: a preparation that finds another
+  /// number after an await was superseded or stopped and must not go on.
+  int _token = 0;
+
   @override
   GenerationState build() {
     _runner = GenerationRunner(
       client: ref.watch(llmClientProvider),
-      readApiKey: ref.watch(apiKeyReaderProvider),
       cache: ref.watch(llmCacheRepositoryProvider),
       nowMs: ref.watch(nowMsProvider),
       onChange: (s) => state = s,
@@ -54,17 +57,20 @@ class ExplainNotifier extends Notifier<GenerationState> {
   /// saved text with the new answer.
   Future<void> start({bool regenerate = false}) async {
     if (!ref.mounted) return;
+    final token = ++_token;
+    bool stale() => !ref.mounted || token != _token;
     _runner.reset(const GenerationState.connecting());
     try {
       final settings = await ref.read(explainSettingsProvider.future);
-      final readiness = await checkReadiness(settings, ref.read(secretStoreProvider));
-      if (!ref.mounted) return;
+      if (stale()) return;
+      final readiness = await checkReadiness(settings, ref.read(keyVaultProvider));
+      if (stale()) return;
       if (!readiness.ready) {
         _runner.reset(GenerationState.notConfigured(readiness.problem!));
         return;
       }
       final data = await ref.read(boardDataProvider(args.gameId).future);
-      if (!ref.mounted) return;
+      if (stale()) return;
       final bundle = data == null ? null : _buildPrompt(data, settings);
       if (bundle == null) {
         _runner.reset(const GenerationState(phase: GenerationPhase.failed, error: LlmError(LlmErrorKind.notAnalysed)));
@@ -73,10 +79,18 @@ class ExplainNotifier extends Notifier<GenerationState> {
       final config = readiness.config!;
       final request = LlmRequest(config: config, messages: bundle.messages);
       final key = CacheKey.of(bundle, config, classifierVersion: ClassifierConfig.standard.version);
-      await _runner.run(request: request, cacheKey: key, kind: PromptKind.move, gameId: args.gameId, useCache: !regenerate);
+      // The key is looked up for the same snapshot that produced `config`.
+      await _runner.run(
+        request: request,
+        readApiKey: ref.read(keyReaderForProvider)(settings),
+        cacheKey: key,
+        kind: PromptKind.move,
+        gameId: args.gameId,
+        useCache: !regenerate,
+      );
     } on Object catch (e) {
       AppLog.warning('Preparing the explanation failed', e);
-      if (ref.mounted) {
+      if (!stale()) {
         _runner.reset(const GenerationState(phase: GenerationPhase.failed, error: LlmError(LlmErrorKind.notAnalysed)));
       }
     }
@@ -109,7 +123,10 @@ class ExplainNotifier extends Notifier<GenerationState> {
   }
 
   /// Stop (SPEC state `cancelled`): keeps the text so far.
-  void cancel() => _runner.cancel();
+  void cancel() {
+    _token++; // also stops a request that is still being prepared
+    _runner.cancel();
+  }
 
   /// Regenerate: a new answer, replacing the cached one.
   Future<void> regenerate() => start(regenerate: true);

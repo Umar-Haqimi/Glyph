@@ -142,6 +142,9 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
     // the board holds is out of date.
     if (id != null && s is AnalysisRunning && !(previous is AnalysisRunning && previous.gameId == id)) {
       ref.invalidate(gameProvider(id));
+      // The lines (and so the facts a summary is built from) are about to
+      // change: a summary shown or streaming for the old analysis goes.
+      ref.invalidate(summaryProvider(id));
     }
     if (id != null && s.isFinished) {
       if (s is AnalysisCompleted) {
@@ -190,6 +193,7 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
   /// away.
   Future<void> analyse(GameRecord game, {bool restart = false, int? depth}) async {
     _cancelledWhileQueued.remove(game.id);
+    if (restart) ref.invalidate(summaryProvider(game.id));
     final AnalysisRequest request;
     try {
       final settings = await ref.read(engineSettingsProvider.future);

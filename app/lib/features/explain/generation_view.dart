@@ -125,6 +125,10 @@ class GenerationView extends StatelessWidget {
           const SizedBox(height: 8),
           Text(l10n.explainCutOff, key: _key('cut-off'), style: theme.textTheme.bodySmall),
         ],
+        if (state.filtered) ...[
+          const SizedBox(height: 8),
+          Text(l10n.explainFiltered, key: _key('filtered'), style: theme.textTheme.bodySmall),
+        ],
         if (state.fromCache && state.phase == GenerationPhase.done) ...[
           const SizedBox(height: 8),
           Align(

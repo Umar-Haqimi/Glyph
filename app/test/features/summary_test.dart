@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/features/explain/generation.dart';
+import 'package:glyph/features/library/library_controller.dart';
 import 'package:glyph/features/explain/summary_controller.dart';
 import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph_core/glyph_core.dart';
@@ -145,10 +147,10 @@ void main() {
       r.llm.send('A saved recap.');
       await r.llm.finish();
       await r.settle();
-      // Leave and come back: the summary state survives, and so does the cache.
+      // Leave and come back: the provider is auto-dispose (nothing is
+      // invalidated by hand), the saved text comes from the cache.
       await tester.pageBack();
       await r.settle(25);
-      r.container.invalidate(summaryProvider(r.id));
       await r.openReport();
       expect(r.summary, 'A saved recap.');
       expect(r.has('summary-saved'), isTrue);
@@ -178,7 +180,6 @@ void main() {
       await r.llm.finish();
       await r.settle();
       await r.container.read(explainSettingsProvider.notifier).setTone(ExplainTone.coach);
-      r.container.invalidate(summaryProvider(r.id));
       await tester.pageBack();
       await r.settle(25);
       await r.openReport();
@@ -222,6 +223,134 @@ void main() {
     });
   });
 
+  group('the summary never outlives its inputs (M6 review)', () {
+    Future<Report> doneSummary(WidgetTester tester, {Map<String, String>? extra, Map<String, String>? secrets}) async {
+      final r = await pumpReport(tester, settings: configured(extra: {'summary_auto': '0', ...?extra}), secrets: secrets);
+      await r.tap('summary-button');
+      r.llm.send('Recap one.');
+      await r.llm.finish();
+      await r.settle();
+      expect(r.summary, 'Recap one.');
+      return r;
+    }
+
+    reportTest('changing tone, language, audience or model while the report is open drops the old text at once', (tester) async {
+      final r = await doneSummary(tester);
+      final settings = r.container.read(explainSettingsProvider.notifier);
+      for (final change in <Future<void> Function()>[
+        () => settings.setTone(ExplainTone.coach),
+        () => settings.setLanguage('Deutsch'),
+        () => settings.setAudience(ExplainAudience.beginner),
+        () => settings.setModel('gpt-other'),
+      ]) {
+        await change();
+        await r.settle();
+        expect(r.has('summary-text'), isFalse, reason: 'the old text is gone');
+        expect(r.state.phase, GenerationPhase.idle);
+        expect(r.has('summary-button'), isTrue);
+      }
+    });
+
+    reportTest('an unrelated settings change keeps the summary', (tester) async {
+      final r = await doneSummary(tester);
+      await r.container.read(explainSettingsProvider.notifier).setSummaryAuto(true);
+      await r.settle();
+      expect(r.summary, 'Recap one.');
+    });
+
+    reportTest('removing the key drops the summary; saving it again does not resurrect stale text', (tester) async {
+      final r = await doneSummary(tester);
+      await r.container.read(apiKeyStatusProvider.future);
+      await r.container.read(apiKeyStatusProvider.notifier).remove();
+      await r.settle();
+      expect(r.has('summary-text'), isFalse);
+      expect(r.state.phase, GenerationPhase.idle);
+      await r.tap('summary-button');
+      expect(r.has('summary-setup'), isTrue, reason: 'no key: the set-up card, not the old text');
+      expect(r.llm.requests, hasLength(1));
+    });
+
+    reportTest('a cache miss resets to idle (loadCached never leaves earlier text)', (tester) async {
+      final r = await doneSummary(tester);
+      r.env.store.llmCache.clear();
+      await r.container.read(summaryProvider(r.id).notifier).loadCached();
+      expect(r.state.phase, GenerationPhase.idle);
+      expect(r.state.text, isEmpty);
+    });
+
+    reportTest('re-analysing the game (restart) drops the summary', (tester) async {
+      final r = await doneSummary(tester);
+      final game = (await r.env.games.get(r.id))!;
+      await r.container.read(analysisJobProvider.notifier).analyse(game, restart: true);
+      await r.settle(40);
+      expect(r.state.text, isNot('Recap one.'));
+      expect(r.state.phase, isNot(GenerationPhase.done));
+    });
+
+    reportTest('deleting the game while its summary streams aborts the request, leaves no cache row, and the next game starts clean', (tester) async {
+      final r = await pumpReport(tester, settings: configured(extra: {'summary_auto': '0'}));
+      await r.tap('summary-button');
+      r.llm.send('Half a recap ');
+      await r.settle();
+      expect(r.state.phase, GenerationPhase.streaming);
+      final before = r.llm.cancelled;
+
+      await r.container.read(libraryProvider.notifier).deleteNow(r.id);
+      await r.settle();
+      expect(r.llm.cancelled, greaterThan(before), reason: 'the response body was dropped');
+      expect(r.env.store.games.containsKey(r.id), isFalse);
+      await r.settle();
+      expect(r.env.store.llmCache, isEmpty);
+
+      // A new game gets a new id and an idle summary of its own.
+      final next = await seedReview(r.env, userSide: Side.white);
+      expect(next, isNot(r.id));
+      expect(r.container.read(summaryProvider(next)).phase, GenerationPhase.idle);
+      expect(r.container.read(summaryProvider(next)).text, isEmpty);
+    });
+
+    reportTest('Stop during preparation sends no request', (tester) async {
+      final r = await pumpReport(tester, settings: configured(extra: {'summary_auto': '0'}), open: false);
+      final notifier = r.container.read(summaryProvider(r.id).notifier);
+      final listener = r.container.listen(summaryProvider(r.id), (_, _) {});
+      addTearDown(listener.close);
+      final run = notifier.generate();
+      expect(r.state.phase, GenerationPhase.connecting);
+      notifier.cancel(); // before the settings, key and game were even read
+      await run;
+      await r.settle();
+      expect(r.llm.requests, isEmpty);
+      expect(r.state.phase, GenerationPhase.cancelled);
+    });
+
+    reportTest('two concurrent starts send one request', (tester) async {
+      final r = await pumpReport(tester, settings: configured(extra: {'summary_auto': '0'}), open: false);
+      final notifier = r.container.read(summaryProvider(r.id).notifier);
+      final listener = r.container.listen(summaryProvider(r.id), (_, _) {});
+      addTearDown(listener.close);
+      unawaited(notifier.generate());
+      unawaited(notifier.generate());
+      unawaited(notifier.autoGenerate());
+      await r.settle(10);
+      expect(r.llm.requests, hasLength(1));
+      notifier.cancel();
+    });
+
+    reportTest('content_filter: the text so far is shown with its own notice and is not saved', (tester) async {
+      final r = await pumpReport(tester, settings: configured(extra: {'summary_auto': '0'}));
+      await r.tap('summary-button');
+      r.llm.send('Partial recap.');
+      r.llm.sendRaw('${FakeLlm.chunk('', finish: 'content_filter')}data: [DONE]\n\n');
+      await r.llm.last.controller!.close();
+      await r.settle();
+      expect(r.summary, 'Partial recap.');
+      expect(r.state.filtered, isTrue);
+      expect(r.state.phase, GenerationPhase.done);
+      expect(find.text(l10n.explainFiltered), findsOneWidget);
+      expect(r.env.store.llmCache, isEmpty, reason: 'a filtered answer is not a complete one');
+    });
+  });
+
   group('automatic summary', () {
     Future<(ProviderContainer, TestEnv, FakeLlm, int)> setup(
       WidgetTester tester, {
@@ -243,16 +372,20 @@ void main() {
       llm.send('Automatic recap.');
       await llm.finish();
       await settleBoard(tester, rounds: 10);
-      expect(container.read(summaryProvider(id)).text, 'Automatic recap.');
-      expect(container.read(summaryProvider(id)).phase, GenerationPhase.done);
+      // Nothing watches the summary (no report open): it was kept alive while
+      // it streamed and the text now lives in the cache.
       expect(env.store.llmCache.values.single.kind, PromptKind.summary);
+      expect(env.store.llmCache.values.single.content, 'Automatic recap.');
 
       // A second automatic pass reuses the saved summary: no new request.
-      container.invalidate(summaryProvider(id));
+      final watch = container.listen(summaryProvider(id), (_, _) {});
+      addTearDown(watch.close);
+      expect(watch.read().phase, GenerationPhase.idle, reason: 'a fresh provider, not a stale one');
       unawaited(container.read(summaryProvider(id).notifier).autoGenerate());
       await settleBoard(tester, rounds: 10);
       expect(llm.requests, hasLength(1));
       expect(container.read(summaryProvider(id)).fromCache, isTrue);
+      expect(container.read(summaryProvider(id)).text, 'Automatic recap.');
     });
 
     for (final (name, settings, secrets) in [
@@ -292,20 +425,28 @@ void main() {
       llm.send('Done automatically.');
       await llm.finish();
       await settleBoard(tester, rounds: 10);
-      expect(container.read(summaryProvider(saved.id)).text, 'Done automatically.');
+      expect(env.store.llmCache.values.single.content, 'Done automatically.', reason: 'saved for the report to show later');
+      final watch = container.listen(summaryProvider(saved.id), (_, _) {});
+      addTearDown(watch.close);
+      await container.read(summaryProvider(saved.id).notifier).loadCached();
+      expect(watch.read().text, 'Done automatically.');
     });
 
-    reportTest('a failure of the automatic summary shows in the report, with Retry, and never blocks', (tester) async {
+    reportTest('a failure of the automatic summary is not kept; the report offers the button, and nothing blocks', (tester) async {
       final llm = FakeLlm()..error(500, {'message': 'oops', 'type': 'server_error'});
       final env = TestEnv(settings: configured(), secrets: {'openai': apiKey}, llm: llm.client);
       final id = await seedReview(env);
       final container = await pumpReview(tester, env, id);
       unawaited(container.read(summaryProvider(id).notifier).autoGenerate());
       await settleBoard(tester, rounds: 10);
-      expect(container.read(summaryProvider(id)).phase, GenerationPhase.failed);
+      expect(llm.requests, hasLength(1));
       await tester.tap(find.byKey(const Key('open-report')));
       await settleBoard(tester, rounds: 25);
-      expect(find.byKey(const Key('summary-retry')), findsOneWidget);
+      expect(find.byKey(const Key('summary-button')), findsOneWidget);
+      llm.ok();
+      await tester.tap(find.byKey(const Key('summary-button')));
+      await settleBoard(tester, rounds: 10);
+      expect(llm.requests, hasLength(2));
     });
   });
 }

@@ -92,6 +92,7 @@ void main() {
     testWidgets('the base URL is validated with the policy, each refusal has its own message', (tester) async {
       final env = TestEnv();
       await openLlm(tester, env);
+      await tapKey(tester, 'llm-provider-custom'); // the hosted presets' address is fixed
       Future<void> expectMessage(String url, String message) async {
         await typeInto(tester, 'llm-base-url', url);
         expect(find.text(message), findsOneWidget, reason: url);
@@ -207,6 +208,92 @@ void main() {
     });
   });
 
+  group('the key follows its address (M6 review)', () {
+    bool readOnly(WidgetTester tester) => tester.widget<TextField>(find.byKey(const Key('llm-base-url'))).readOnly;
+
+    testWidgets('the address of OpenAI and OpenRouter is locked; Custom (and the local presets) can be edited', (tester) async {
+      final env = TestEnv(secrets: {'openai': secret});
+      await openLlm(tester, env);
+      expect(readOnly(tester), isTrue);
+      expect(find.text(l10n.llmBaseUrlLocked), findsOneWidget);
+      await tapKey(tester, 'llm-provider-openrouter');
+      expect(readOnly(tester), isTrue);
+      await tapKey(tester, 'llm-provider-ollama');
+      expect(readOnly(tester), isFalse);
+      await tapKey(tester, 'llm-provider-custom');
+      expect(readOnly(tester), isFalse);
+      await tapKey(tester, 'llm-provider-openai');
+      expect(readOnly(tester), isTrue);
+      expect(find.text(l10n.llmBaseUrlLocked), findsOneWidget);
+    });
+
+    testWidgets('a key saved for one address is not sent to another: the screen says so; saving again binds it here', (tester) async {
+      final llm = FakeLlm()
+        ..failWith = (status: 200, body: '{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}', contentType: 'application/json');
+      final env = TestEnv(settings: {'llm_provider': 'custom', 'llm_base_url': 'https://a.example/v1', 'llm_model': 'm'}, llm: llm.client);
+      await openLlm(tester, env);
+      await typeInto(tester, 'llm-api-key', secret);
+      await tapKey(tester, 'llm-key-save');
+      expect(find.byKey(const Key('llm-key-other-origin')), findsNothing);
+      await tapKey(tester, 'llm-test');
+      expect(llm.last.headers['Authorization'], 'Bearer $secret');
+
+      await typeInto(tester, 'llm-base-url', 'https://b.example/v1');
+      expect(shown(tester, 'llm-key-other-origin'), l10n.llmKeyOtherOrigin('https://a.example:443', 'https://b.example:443'));
+      await tapKey(tester, 'llm-test');
+      expect(llm.last.uri.host, 'b.example');
+      expect(llm.last.headers['Authorization'], isNull, reason: 'Test connection follows the same rules');
+
+      await typeInto(tester, 'llm-api-key', secret);
+      await tapKey(tester, 'llm-key-save');
+      expect(find.byKey(const Key('llm-key-other-origin')), findsNothing);
+      await tapKey(tester, 'llm-test');
+      expect(llm.last.headers['Authorization'], 'Bearer $secret');
+    });
+
+    testWidgets('a key cannot be saved before there is a valid address', (tester) async {
+      final env = TestEnv(settings: {'llm_provider': 'custom', 'llm_base_url': ''});
+      await openLlm(tester, env);
+      await typeInto(tester, 'llm-api-key', secret);
+      await tapKey(tester, 'llm-key-save');
+      expect(find.text(l10n.llmApiKeyNeedsUrl), findsOneWidget);
+      expect(env.secrets.slots, isEmpty);
+    });
+
+    testWidgets('http: the switch is off by default, stored per origin, and the key is only sent once it is on', (tester) async {
+      final llm = FakeLlm()
+        ..failWith = (status: 200, body: '{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}', contentType: 'application/json');
+      final env = TestEnv(
+        settings: {'llm_provider': 'ollama', 'llm_base_url': 'http://192.168.1.20:11434/v1', 'llm_model': 'm'},
+        llm: llm.client,
+      );
+      await openLlm(tester, env);
+      expect(tester.widget<SwitchListTile>(find.byKey(const Key('llm-cleartext-key'))).value, isFalse);
+      await typeInto(tester, 'llm-api-key', secret);
+      await tapKey(tester, 'llm-key-save');
+      expect(find.byKey(const Key('llm-key-cleartext-blocked')), findsOneWidget);
+      await tapKey(tester, 'llm-test');
+      expect(llm.last.headers['Authorization'], isNull);
+
+      await tapKey(tester, 'llm-cleartext-key');
+      expect(tester.widget<SwitchListTile>(find.byKey(const Key('llm-cleartext-key'))).value, isTrue);
+      expect(await env.settings.get('llm_cleartext_origins'), 'http://192.168.1.20:11434');
+      expect(find.byKey(const Key('llm-key-cleartext-blocked')), findsNothing);
+      await tapKey(tester, 'llm-test');
+      expect(llm.last.headers['Authorization'], 'Bearer $secret');
+
+      await typeInto(tester, 'llm-base-url', 'http://192.168.1.21:11434/v1');
+      expect(tester.widget<SwitchListTile>(find.byKey(const Key('llm-cleartext-key'))).value, isFalse, reason: 'another origin, not allowed');
+      expect(find.byKey(const Key('llm-key-other-origin')), findsOneWidget);
+    });
+
+    testWidgets('an https address has no such switch', (tester) async {
+      final env = TestEnv();
+      await openLlm(tester, env);
+      expect(find.byKey(const Key('llm-cleartext-key')), findsNothing);
+    });
+  });
+
   group('Test connection', () {
     testWidgets('success: sends a tiny non-streamed request with the key and reports it', (tester) async {
       final llm = FakeLlm();
@@ -268,6 +355,7 @@ void main() {
       await tapKey(tester, 'llm-test');
       expect(shown(tester, 'llm-test-result'), l10n.llmErrNoModel);
 
+      await tapKey(tester, 'llm-provider-custom');
       await typeInto(tester, 'llm-model', 'gpt-9');
       await typeInto(tester, 'llm-base-url', 'http://example.com/v1');
       final before = llm.requests.length;

@@ -48,6 +48,7 @@ class TestEnv {
     EngineDriverFactory? driverFactory,
     InMemoryAnalysisRepository Function(InMemoryStore store)? analysesBuilder,
     Map<String, String>? secrets,
+    InMemorySecretStore? secretStore,
     LlmClient? llm,
     this.timeouts = const PipelineTimeouts(
       handshake: Duration(seconds: 2),
@@ -60,7 +61,7 @@ class TestEnv {
         picker = picker ?? FakeFilePicker(null),
         book = book ?? OpeningBook(const {}),
         driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()),
-        secrets = InMemorySecretStore(secrets),
+        secrets = secretStore ?? InMemorySecretStore(secrets),
         llm = llm ?? offlineLlmClient() {
     games = InMemoryGameRepository(store);
     cache = InMemoryLlmCacheRepository(store);

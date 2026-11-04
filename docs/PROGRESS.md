@@ -173,3 +173,16 @@ Notes for M7 / M8:
 - `docs/HARDWARE_TEST.md` D8-D14 are the new manual checks for M6 (key survives a restart, no key / prompt in `logcat`, cancel on close, rotation, TalkBack, summary, `max_tokens` rejection); D1-D7 still need running with real providers.
 - The summary prompt carries 8 key moments and Win% every 5 plies; if a small local model rambles, shorten both in `PromptBuilder.summary` and bump `PromptBuilder.version`.
 - Changing `ClassifierConfig` or any template means bumping `ClassifierConfig.version` / `PromptBuilder.version` (snapshots then fail until regenerated with `UPDATE_SNAPSHOTS=1`).
+
+## M6 review fixes: done (host-verified)
+
+Findings and what changed (details in docs/DECISIONS.md, "M6 review fixes"):
+1. **Key bound to an origin** (MEDIUM): `KeyVault` (new `features/settings/key_vault.dart`) sends a key only to the origin it was saved for and over `http://` only after a per-origin, default-off opt-in; hosted presets (OpenAI, OpenRouter) have a read-only address (editing means Custom); Test connection follows the same rules; legacy keys are bound on first read; UI shows the "saved for X" notice and the cleartext switch. New strings in `app_en.arb`.
+2. **Config and key from one snapshot** (MEDIUM): `keyReaderForProvider(settings)`; `GenerationRunner.run(readApiKey:)`.
+3. **Summary state** (MEDIUM): auto-dispose + keep-alive while running, idle on cache miss, reset on settings / key / opt-in changes, game delete (request aborted), re-analysis; **migration 3** (AUTOINCREMENT `games`, FK on `llm_cache.game_id`, foreign keys handled around the rebuild). The hand-invalidating test now exercises the production path.
+4. Trailing-dot hosts refused. 5. Stop / concurrency during preparation (generation tokens). 6. `content_filter` is neither cached nor shown as complete. 7. Test connection total timeout is `timeout`. 8. Delete cancels the summary request; `llm_cache.put` ignores a deleted game and the FK backs it. 9. `Limits.maxLlmTotalStreamBytes` (1 MB) -> `badStream`.
+
+Tests: core 555 -> see final counts below; app 309 -> see final counts below. New: core trailing-dot / origin / total-cap / content_filter / testConnection-timeout tests; app `key_binding_test` (vault, binding, migration, hosted lock, reader snapshot, real-client header checks), 5 more `llm_settings_test` cases, 8 more `summary_test` cases (settings, key, cache miss, re-analysis, delete while streaming, Stop in preparation, concurrent starts, content_filter), 4 more `explain_sheet_test` cases, repository contract tests (no cache row for a deleted game, ids never reused) and the v2 -> v3 upgrade with data.
+
+Behaviour changes to know about: an existing install keeps working (keys are bound on first read); a user who had edited the OpenAI / OpenRouter address now finds the connection on Custom with no key (re-enter it); a LAN Ollama key is no longer sent over http until the switch is turned on; the report shows a saved summary by reading the cache on open, so a summary that is not in the cache (cut off, filtered) is gone after leaving the report. `docs/HARDWARE_TEST.md` is unchanged.
+

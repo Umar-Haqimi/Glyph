@@ -25,6 +25,13 @@ abstract final class Limits {
   /// stream is stopped and the result is marked truncated.
   static const int maxLlmStreamBytes = 32 * 1024;
 
+  /// Maximum number of bytes read from one LLM response stream, of any kind
+  /// (answer text, reasoning deltas, comments, keep-alives, usage chunks): 1 MB.
+  /// [maxLlmStreamBytes] only counts answer text; a hostile or broken endpoint
+  /// that streams anything else for ever is cut off at this total and the
+  /// request fails with `badStream`.
+  static const int maxLlmTotalStreamBytes = 1024 * 1024;
+
   /// Maximum size of one server-sent event (and of an unfinished line) from an
   /// LLM endpoint, in bytes: 256 KB. A stream that never ends a line is cut off.
   static const int maxSseEventBytes = 256 * 1024;

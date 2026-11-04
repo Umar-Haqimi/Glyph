@@ -109,6 +109,12 @@ final class LlmFinished extends LlmEvent {
   /// The text ends early: our cap, or the model's token limit.
   bool get cutOff => truncated || finishReason == 'length';
 
+  /// The provider's content filter stopped the answer (`content_filter`).
+  bool get filtered => finishReason == 'content_filter';
+
+  /// A whole answer worth saving: neither cut off nor filtered.
+  bool get complete => !cutOff && !filtered;
+
   @override
   String toString() => 'LlmFinished(${finishReason ?? '-'}${truncated ? ', truncated' : ''})';
 }

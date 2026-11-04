@@ -119,6 +119,10 @@ abstract final class SettingsKeys {
   static const llmModel = 'llm_model';
   static const llmTokenMode = 'llm_token_mode';
   static const llmTokenValue = 'llm_token_value';
+  // The origin (scheme://host:port) an API key was saved for, per key slot,
+  // and the origins allowed to receive a key over plain http. Origins only.
+  static const llmKeyOriginPrefix = 'llm_bound_origin.';
+  static const llmCleartextOrigins = 'llm_cleartext_origins';
   static const explainLanguage = 'explain_language';
   static const explainTone = 'explain_tone';
   static const explainAudience = 'explain_audience';

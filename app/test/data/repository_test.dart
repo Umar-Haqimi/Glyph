@@ -349,6 +349,28 @@ void contract(String name, Repos Function() create) {
       expect(await r.cache.get('orphan'), isNotNull);
     });
 
+    test('llm cache: nothing is saved for a game that does not exist (deleted while the answer streamed)', () async {
+      final a = (await r.games.save(newGame(sourceId: 'a'))).id;
+      await r.games.delete(a);
+      await r.cache.put(entry('late', gameId: a));
+      expect(await r.cache.get('late'), isNull);
+      expect(await r.cache.count(), 0);
+      await r.cache.put(entry('free')); // no owner is fine
+      expect(await r.cache.count(), 1);
+    });
+
+    test('game ids are never reused after a delete', () async {
+      final a = (await r.games.save(newGame(sourceId: 'a'))).id;
+      final b = (await r.games.save(newGame(sourceId: 'b'))).id;
+      await r.games.delete(b);
+      final c = (await r.games.save(newGame(sourceId: 'c'))).id;
+      expect(c, greaterThan(b));
+      await r.games.delete(c);
+      await r.games.delete(a);
+      final d = (await r.games.save(newGame(sourceId: 'd'))).id;
+      expect(d, greaterThan(c));
+    });
+
     test('settings', () async {
       expect(await r.settings.get('k'), isNull);
       await r.settings.set('k', 'v1');
@@ -386,8 +408,8 @@ void main() {
     test('creates the SPEC 5.4 schema (plus llm_cache.game_id from M6) at the latest user_version', () {
       final db = Db.inMemory();
       addTearDown(db.close);
-      expect(db.raw.userVersion, 2);
-      expect(Db.schemaVersion, 2);
+      expect(db.raw.userVersion, 3);
+      expect(Db.schemaVersion, 3);
       final tables = db.raw
           .select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
           .map((r) => r['name'])
@@ -481,10 +503,61 @@ void main() {
       v1.close();
       final db = Db.open(path);
       addTearDown(db.close);
-      expect(db.raw.userVersion, 2);
+      expect(db.raw.userVersion, 3);
       final row = db.raw.select('SELECT * FROM llm_cache').single;
       expect(row['content'], 'text');
       expect(row['game_id'], isNull);
+    });
+
+    test('upgrading a version 2 database with data to v3 keeps every row, FKs and indexes, and ids stop being reused', () async {
+      final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v2.db';
+      addTearDown(() => File(path).parent.deleteSync(recursive: true));
+      final v2 = Db.open(path, migrations: Db.migrations.take(2).toList());
+      expect(v2.raw.userVersion, 2);
+      final games = SqliteGameRepository(v2);
+      final a = (await games.save(newGame(sourceId: 'a'))).id;
+      final b = (await games.save(newGame(sourceId: 'b', white: 'Carol'))).id;
+      final c = (await games.save(newGame(sourceId: 'c'))).id;
+      v2.raw.execute('DELETE FROM games WHERE id = $c'); // v2 would hand c out again
+      final analyses = SqliteAnalysisRepository(v2);
+      await analyses.upsert(
+        AnalysisRecord(gameId: b, engine: 'sf', depth: 12, multipv: 2, status: AnalysisStatus.completed, completedPlies: 2, updatedAt: 7),
+      );
+      await analyses.putLabels(b, [MoveLabelRecord(gameId: b, ply: 1, label: MoveLabel.best)]);
+      v2.raw.execute("INSERT INTO position_lines (game_id, ply, rank, depth, pv_uci) VALUES ($b, 0, 1, 12, 'e2e4')");
+      v2.raw.execute("INSERT INTO settings VALUES ('keep','me')");
+      v2.raw.execute("INSERT INTO llm_cache (key, kind, content, model, created_at, game_id) VALUES ('mine','move','t','m',5,$b)");
+      v2.raw.execute("INSERT INTO llm_cache (key, kind, content, model, created_at, game_id) VALUES ('free','move','t','m',5,NULL)");
+      v2.raw.execute("INSERT INTO llm_cache (key, kind, content, model, created_at, game_id) VALUES ('orphan','move','t','m',5,99)");
+      v2.close();
+
+      final db = Db.open(path);
+      addTearDown(db.close);
+      expect(db.raw.userVersion, 3);
+      expect(db.raw.select('PRAGMA foreign_keys').first.values.first, 1, reason: 'switched back on after the rebuild');
+      expect(db.raw.select('PRAGMA foreign_key_check'), isEmpty);
+      // Data survived, ids included.
+      expect(db.raw.select('SELECT id FROM games ORDER BY id').map((r) => r['id']), [a, b]);
+      expect((await SqliteGameRepository(db).get(b))!.white, 'Carol');
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM analyses WHERE game_id = $b').first['n'], 1);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM move_labels WHERE game_id = $b').first['n'], 1);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM position_lines WHERE game_id = $b').first['n'], 1);
+      expect(db.raw.select("SELECT value FROM settings WHERE key = 'keep'").single['value'], 'me');
+      expect(db.raw.select('SELECT key FROM llm_cache ORDER BY key').map((r) => r['key']), ['free', 'mine'], reason: 'the orphan row is dropped');
+      // Indexes and the (source, source_id) uniqueness are back.
+      expect(db.raw.select("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'llm_cache_game'"), isNotEmpty);
+      expect((await SqliteGameRepository(db).save(newGame(sourceId: 'a'))).duplicate, isTrue);
+      // The children still cascade from the rebuilt games table.
+      await SqliteGameRepository(db).delete(b);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM analyses').first['n'], 0);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM move_labels').first['n'], 0);
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM position_lines').first['n'], 0);
+      expect(db.raw.select("SELECT COUNT(*) AS n FROM llm_cache WHERE key = 'mine'").first['n'], 0);
+      // AUTOINCREMENT: the deleted ids (b, and the c that v2 left free) are never reissued.
+      final fresh = (await SqliteGameRepository(db).save(newGame(sourceId: 'z'))).id;
+      expect(fresh, greaterThan(b));
+      final sequence = db.raw.select("SELECT seq FROM sqlite_sequence WHERE name = 'games'").single['seq'] as int;
+      expect(sequence, fresh);
     });
 
     test('transaction rolls back on error', () {

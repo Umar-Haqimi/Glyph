@@ -122,7 +122,9 @@ class LlmClient {
     final abort = Completer<void>();
     final client = _factory();
     String? key;
+    var timedOut = false;
     final timer = Timer(timeouts.total, () {
+      timedOut = true;
       if (!abort.isCompleted) abort.complete();
       client.close();
     });
@@ -146,6 +148,7 @@ class LlmClient {
       parseCompleteResponse(body);
       return null;
     } on Object catch (e) {
+      if (timedOut) return const LlmError(LlmErrorKind.timeout);
       return _redact(ErrorMapper.fromException(e), key);
     } finally {
       timer.cancel();
@@ -203,6 +206,7 @@ class LlmClient {
     var sawFinish = false;
     String? finishReason;
     var truncated = false;
+    var totalBytes = 0;
 
     // Returns true when reading can stop.
     bool handle(List<SseEvent> events) {
@@ -247,6 +251,13 @@ class LlmClient {
     sub = idleTimeout(response.stream, timeouts.firstByte).listen(
       (chunk) {
         if (isCancelled() || finished.isCompleted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > Limits.maxLlmTotalStreamBytes) {
+          // Reasoning deltas, comments and the like are not counted as text.
+          unawaited(sub.cancel());
+          finished.completeError(const LlmException(LlmError(LlmErrorKind.badStream)));
+          return;
+        }
         try {
           if (handle(decoder.add(chunk))) {
             unawaited(sub.cancel());

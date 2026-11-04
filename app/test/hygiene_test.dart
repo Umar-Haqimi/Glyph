@@ -140,6 +140,7 @@ void main() {
         'features/explain/generation.dart',
         'features/explain/explain_controller.dart',
         'features/explain/summary_controller.dart',
+        'features/settings/key_vault.dart',
       };
       for (final f in sources()) {
         final path = f.path.replaceFirst('lib/', '');

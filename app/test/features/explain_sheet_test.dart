@@ -1,12 +1,16 @@
 
+import 'dart:async';
+
 import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glyph/features/explain/explain_controller.dart';
 import 'package:glyph/features/explain/explain_sheet.dart';
 import 'package:glyph/features/explain/streaming_text.dart';
 import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph/platform/app_log.dart';
+import 'package:glyph/platform/secret_store.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
@@ -690,4 +694,88 @@ void main() {
       expect(logged.last, 'probe (_Exception)');
     });
   });
+
+  group('preparation (M6 review)', () {
+    ExplainNotifier notifierOf(Harness h) =>
+        h.container.read(explainProvider(ExplainArgs(h.env.store.games.keys.first, 6)).notifier);
+
+    Future<Harness> sheetWithAnswer(WidgetTester tester) async {
+      final h = await pumpExplain(tester);
+      await h.openExplain();
+      h.llm.send('First answer.');
+      await h.llm.finish();
+      await h.settle();
+      expect(h.llm.requests, hasLength(1));
+      return h;
+    }
+
+    explainTest('Stop while the request is still being prepared sends nothing', (tester) async {
+      final h = await sheetWithAnswer(tester);
+      final n = notifierOf(h);
+      final run = n.regenerate();
+      n.cancel(); // before the settings, key and prompt were read
+      await run;
+      await h.settle();
+      expect(h.llm.requests, hasLength(1));
+      expect(h.text('explain-status-text'), l10n.explainStatusCancelled);
+    });
+
+    explainTest('two starts at once send one request (the later one wins)', (tester) async {
+      final h = await sheetWithAnswer(tester);
+      final n = notifierOf(h);
+      unawaited(n.regenerate());
+      unawaited(n.regenerate());
+      await h.settle();
+      expect(h.llm.requests, hasLength(2));
+      n.cancel();
+    });
+
+    explainTest('content_filter: the text is kept on screen with its own notice and never saved', (tester) async {
+      final h = await pumpExplain(tester);
+      await h.openExplain();
+      h.llm.send('Bc5 develops');
+      h.llm.sendRaw('${FakeLlm.chunk('', finish: 'content_filter')}data: [DONE]\n\n');
+      await h.llm.last.controller!.close();
+      await h.settle();
+      expect(h.answer, 'Bc5 develops');
+      expect(h.has('explain-filtered'), isTrue);
+      expect(find.text(l10n.explainFiltered), findsOneWidget);
+      expect(h.env.store.llmCache, isEmpty);
+    });
+
+    explainTest('the key and the config come from one settings snapshot even if the provider changes while preparing', (tester) async {
+      final store = HookedSecretStore({'openai': apiKey});
+      final llm = FakeLlm();
+      final env = TestEnv(settings: openAiSettings(), secretStore: store, llm: llm.client);
+      final id = await seedReview(env, userSide: Side.black);
+      final container = await pumpReview(tester, env, id, initialPly: 6);
+      final h = Harness(tester, env, llm, container);
+      // Right after the readiness check has read the OpenAI key, the user
+      // switches to Custom (another key slot, another address).
+      store.afterFirstRead = () async {
+        await container.read(explainSettingsProvider.notifier).setProvider(LlmProvider.custom);
+        await container.read(explainSettingsProvider.notifier).setBaseUrl('https://elsewhere.example/v1');
+      };
+      await h.openExplain();
+      expect(llm.requests, hasLength(1));
+      expect(llm.last.uri.host, 'api.openai.com', reason: 'the config of the snapshot');
+      expect(llm.last.headers['Authorization'], 'Bearer $apiKey', reason: 'and the key of the same snapshot');
+    });
+  });
+}
+
+/// A secret store that runs a hook once, right after the first read.
+class HookedSecretStore extends InMemorySecretStore {
+  HookedSecretStore(super.initial);
+
+  Future<void> Function()? afterFirstRead;
+
+  @override
+  Future<String?> read(String slot) async {
+    final value = await super.read(slot);
+    final hook = afterFirstRead;
+    afterFirstRead = null;
+    if (hook != null) await hook();
+    return value;
+  }
 }

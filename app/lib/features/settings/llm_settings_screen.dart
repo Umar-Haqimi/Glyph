@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../l10n/app_localizations.dart';
 import '../explain/error_text.dart';
 import 'explain_settings.dart';
+import 'key_vault.dart';
 
 /// Settings > Explanations > LLM connection (SPEC F13): provider preset, base
 /// URL, API key (secure storage, masked, Remove), model, token-limit
@@ -107,9 +108,11 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
       _testOk = false;
       _testError = null;
     });
+    // Same rules as a real request: the key of this snapshot goes only to the
+    // origin it was saved for, and over http only if allowed.
     final error = await ref.read(llmClientProvider).testConnection(
           s.config,
-          readApiKey: ref.read(apiKeyReaderProvider),
+          readApiKey: ref.read(keyReaderForProvider)(s),
         );
     if (!mounted) return;
     setState(() {
@@ -127,12 +130,18 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
     final keyStatus = ref.watch(apiKeyStatusProvider).value;
     final policy = BaseUrlPolicy.check(s.baseUrl);
     final local = policy.ok && BaseUrlPolicy.isLocalHost(policy.uri!.host);
+    final availability = ref.watch(keyAvailabilityProvider);
+    final origin = policy.ok ? BaseUrlPolicy.origin(policy.uri!) : null;
+    final cleartext = origin != null && KeyBinding.isCleartext(origin);
+    final cleartextOn = origin != null && (ref.watch(cleartextOptInProvider).value ?? const {}).contains(origin);
 
     String? urlError;
     if (!policy.ok) urlError = baseUrlProblemText(l10n, policy.problem!);
     String? urlHelper;
     if (policy.ok && policy.warnings.contains(BaseUrlWarning.missingVersionPath)) {
       urlHelper = l10n.llmUrlNoVersion;
+    } else if (s.provider.hosted) {
+      urlHelper = l10n.llmBaseUrlLocked;
     } else if (s.provider == LlmProvider.ollama || s.provider == LlmProvider.lmstudio) {
       urlHelper = l10n.llmBaseUrlLocalHint;
     }
@@ -161,6 +170,9 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
         TextField(
           key: const Key('llm-base-url'),
           controller: _url,
+          // OpenAI and OpenRouter have a fixed address: the key stored for
+          // them can only go there. Custom is the place for any other.
+          readOnly: s.provider.hosted,
           keyboardType: TextInputType.url,
           autocorrect: false,
           enableSuggestions: false,
@@ -191,6 +203,24 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
             style: theme.textTheme.bodyMedium,
           ),
         ),
+        if (keyStatus != null && keyStatus.present && availability == KeyAvailability.otherOrigin)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              l10n.llmKeyOtherOrigin(keyStatus.boundOrigin ?? '?', origin ?? '?'),
+              key: const Key('llm-key-other-origin'),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+            ),
+          ),
+        if (availability == KeyAvailability.cleartextBlocked)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              l10n.llmKeyCleartextBlocked,
+              key: const Key('llm-key-cleartext-blocked'),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+            ),
+          ),
         const SizedBox(height: 8),
         TextField(
           key: const Key('llm-api-key'),
@@ -206,7 +236,11 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
           decoration: InputDecoration(
             labelText: l10n.llmApiKeyHint,
             border: const OutlineInputBorder(),
-            errorText: _keyProblem == null ? null : l10n.llmApiKeyInvalid,
+            errorText: switch (_keyProblem) {
+              null => null,
+              ApiKeyProblem.noValidUrl => l10n.llmApiKeyNeedsUrl,
+              _ => l10n.llmApiKeyInvalid,
+            },
             suffixIcon: IconButton(
               key: const Key('llm-key-visibility'),
               tooltip: l10n.llmApiKeyShow,
@@ -230,6 +264,15 @@ class _LlmFormState extends ConsumerState<_LlmForm> {
           ],
         ),
         const SizedBox(height: 8),
+        if (cleartext)
+          SwitchListTile(
+            key: const Key('llm-cleartext-key'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.llmCleartextTitle),
+            subtitle: Text(l10n.llmCleartextBody(origin)),
+            value: cleartextOn,
+            onChanged: (v) => ref.read(cleartextOptInProvider.notifier).allow(origin, v),
+          ),
         if (local)
           Text(
             l10n.llmApiKeyOptional,

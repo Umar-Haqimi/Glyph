@@ -203,6 +203,8 @@ class InMemoryLlmCacheRepository implements LlmCacheRepository {
 
   @override
   Future<void> put(CachedLlmText entry, {int maxEntries = LlmCacheRepository.defaultMaxEntries}) async {
+    final gameId = entry.gameId;
+    if (gameId != null && !store.games.containsKey(gameId)) return; // same guard as the SQLite foreign key
     store.llmCache.remove(entry.key);
     store.llmCache[entry.key] = entry;
     final byAge = store.llmCache.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));

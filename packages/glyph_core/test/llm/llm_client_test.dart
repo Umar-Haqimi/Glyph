@@ -434,7 +434,60 @@ void main() {
     });
   });
 
+  group('total stream cap and finish reasons', () {
+    test('reasoning-only chunks and comments are cut at the total byte cap -> badStream', () async {
+      final closed = Completer<void>();
+      fake.handler = (req, _) async {
+        startStream(req.response);
+        req.response.done.then<void>((_) => closed.complete(), onError: (Object _) => closed.complete());
+        final reasoning = 'data: ${jsonEncode({
+          'choices': [
+            {'index': 0, 'delta': {'reasoning': 'x' * 60000}, 'finish_reason': null},
+          ],
+        })}\n\n';
+        for (var i = 0; i < 40; i++) {
+          req.response.write(reasoning); // ~2.4 MB, no answer text at all
+          await req.response.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 2));
+        }
+        await req.response.close();
+      };
+      final r = await collect(client().stream(requestFor(fake.baseUrl), readApiKey: key));
+      expect(r.error!.error.kind, LlmErrorKind.badStream);
+      expect(r.events.whereType<LlmFinished>(), isEmpty);
+      await closed.future.timeout(const Duration(seconds: 5));
+    });
+
+    test('finish_reason content_filter is reported as filtered, not complete', () async {
+      fake.handler = (req, _) async {
+        startStream(req.response);
+        req.response.write(sse('Partial'));
+        req.response.write(sse('', finish: 'content_filter'));
+        req.response.write('data: [DONE]\n\n');
+        await req.response.close();
+      };
+      final r = await collect(client().stream(requestFor(fake.baseUrl), readApiKey: key));
+      final fin = r.events.last as LlmFinished;
+      expect(fin.filtered, isTrue);
+      expect(fin.complete, isFalse);
+      expect(fin.cutOff, isFalse);
+      expect(const LlmFinished(finishReason: 'stop').complete, isTrue);
+      expect(const LlmFinished(finishReason: 'length').complete, isFalse);
+      expect(const LlmFinished(truncated: true).complete, isFalse);
+    });
+  });
+
   group('testConnection', () {
+    test('the 180 s total timer maps to timeout, not offline', () async {
+      fake.handler = (req, _) async {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        await req.response.close();
+      };
+      final c = client(timeouts: const LlmTimeouts(firstByte: Duration(seconds: 5), total: Duration(milliseconds: 200)));
+      final e = await c.testConnection(LlmConfig(baseUrl: fake.baseUrl, model: 'm'), readApiKey: key);
+      expect(e!.kind, LlmErrorKind.timeout);
+    });
+
     test('success: tiny non-streamed request with the key and the model', () async {
       fake.handler = (req, _) async {
         req.response.headers.contentType = ContentType.json;
