@@ -362,6 +362,24 @@ void main() {
       expect(totals, [const Duration(seconds: 120), Limits.maxRateLimitWait]);
     });
 
+    test('Retry-After as an HTTP-date is parsed, capped at five minutes; a past or junk date falls back to the default', () async {
+      var calls = 0;
+      String future(Duration d) => HttpDate.format(DateTime.now().toUtc().add(d));
+      final headers = <String>[future(const Duration(minutes: 3)), future(const Duration(hours: 5)), future(const Duration(hours: -1)), 'soon'];
+      site.handler = (req, seen) async {
+        if (calls < headers.length) return sendStatus(req.response, 429, headers: {'retry-after': headers[calls++]});
+        return sendChunked(req.response, utf8.encode(ndjson([lichessGame('aaaaaaa1')])), 100);
+      };
+      final totals = <Duration>[];
+      await client(sleep: (d) async {}, retries: 4).fetchGames('alice', onEvent: (e) {
+        if (e is OnlineBackoff && !totals.contains(e.total)) totals.add(e.total);
+      });
+      expect(totals.length, 3);
+      expect(totals[0].inSeconds, inInclusiveRange(175, 180));
+      expect(totals[1], Limits.maxRateLimitWait);
+      expect(totals[2], Limits.rateLimitWait);
+    });
+
     test('still 429 after the retries: rateLimited, requests = 1 + retries', () async {
       site.handler = (req, seen) => sendStatus(req.response, 429);
       final slept = <Duration>[];

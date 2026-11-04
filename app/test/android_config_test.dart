@@ -9,6 +9,12 @@ import 'package:glyph_core/glyph_core.dart';
 void main() {
   final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
   final activity = File('android/app/src/main/kotlin/my/umarh/glyph/MainActivity.kt').readAsStringSync();
+  final intakeActivity = File('android/app/src/main/kotlin/my/umarh/glyph/ShareIntakeActivity.kt').readAsStringSync();
+
+  String activityBlock(String name) =>
+      RegExp('<activity\\s[^>]*android:name="\\.$name"[^>]*>.*?</activity>', dotAll: true).firstMatch(manifest)!.group(0)!;
+  final mainBlock = activityBlock('MainActivity');
+  final intakeBlock = activityBlock('ShareIntakeActivity');
 
   test('the main manifest requests exactly INTERNET (share and export add no permission)', () {
     final permissions = RegExp(r'<uses-permission[^>]*android:name="([^"]+)"').allMatches(manifest).map((m) => m.group(1)).toList();
@@ -20,12 +26,20 @@ void main() {
     expect(manifest, contains('android:allowBackup="false"'));
   });
 
-  List<String> filters() => RegExp(r'<intent-filter>(.*?)</intent-filter>', dotAll: true).allMatches(manifest).map((m) => m.group(1)!).toList();
+  List<String> filtersOf(String block) =>
+      RegExp(r'<intent-filter>(.*?)</intent-filter>', dotAll: true).allMatches(block).map((m) => m.group(1)!).toList();
 
-  test('intent filters: launcher, text/plain share, PGN file share, Open with by mime type and by *.pgn name', () {
-    final all = filters();
-    expect(all.length, 5);
-    expect(all.where((f) => f.contains('android.intent.action.MAIN')).length, 1);
+  test('MainActivity has the launcher filter only; every SEND / VIEW filter belongs to ShareIntakeActivity', () {
+    final main = filtersOf(mainBlock);
+    expect(main.length, 1);
+    expect(main.single, contains('android.intent.action.MAIN'));
+    expect(main.single, contains('android.intent.category.LAUNCHER'));
+    expect(manifest.split('<intent-filter>').length - 1, 5);
+  });
+
+  test('intake filters: text/plain share, PGN file share, Open with by mime type and by *.pgn name; content scheme only', () {
+    final all = filtersOf(intakeBlock);
+    expect(all.length, 4);
     final send = all.where((f) => f.contains('android.intent.action.SEND')).toList();
     expect(send.length, 2);
     expect(send.any((f) => f.contains('android:mimeType="text/plain"')), isTrue);
@@ -34,22 +48,74 @@ void main() {
     expect(view.length, 2);
     for (final f in view) {
       expect(f.contains('android.intent.category.DEFAULT'), isTrue);
-      expect(f.contains('android:scheme="content"') && f.contains('android:scheme="file"'), isTrue);
+      expect(f.contains('android:scheme="content"'), isTrue);
+      expect(f.contains('android:scheme="file"'), isFalse, reason: 'file: URIs are not accepted');
     }
+    expect(manifest, isNot(contains('android:scheme="file"')));
     expect(view.any((f) => f.contains('application/x-chess-pgn')), isTrue);
     final byName = view.firstWhere((f) => f.contains('pathPattern'));
     expect(byName, contains('android:mimeType="*/*"'));
     expect(RegExp('pathPattern').allMatches(byName).length, 3, reason: 'a.pgn, a.b.pgn, a.b.c.pgn');
     expect(byName, isNot(contains('pathSuffix')), reason: 'API 31+ only');
-    for (final f in all.where((f) => !f.contains('MAIN'))) {
+    for (final f in all) {
       expect(f, contains('android.intent.category.DEFAULT'));
     }
   });
 
-  test('the activity stays singleTop and exported (a share while the app runs arrives in onNewIntent)', () {
-    expect(manifest, contains('android:launchMode="singleTop"'));
-    expect(manifest, contains('android:exported="true"'));
+  test('ShareIntakeActivity is a UI-less, history-less forwarder; MainActivity is singleTask in the app task', () {
+    expect(intakeBlock, contains('android:exported="true"'));
+    expect(intakeBlock, contains('Theme.NoDisplay'));
+    expect(intakeBlock, contains('android:excludeFromRecents="true"'));
+    expect(intakeBlock, contains('android:noHistory="true"'));
+    expect(intakeActivity, contains('class ShareIntakeActivity : Activity()'));
+    expect(intakeActivity, isNot(contains('FlutterActivity')), reason: 'no second engine');
+    expect(intakeActivity, contains('FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP'));
+    expect(intakeActivity, contains('FLAG_GRANT_READ_URI_PERMISSION'));
+    expect(intakeActivity, contains('finish()'));
+    expect(mainBlock, contains('android:launchMode="singleTask"'));
+    expect(mainBlock, contains('android:exported="true"'), reason: 'the launcher needs it');
+    expect(manifest, isNot(contains('android:taskAffinity')));
+    expect(manifest, isNot(contains('singleTop')));
     expect(activity, contains('override fun onNewIntent'));
+  });
+
+  test('MainActivity acts only on intents from the intake activity, never after process-death restore', () {
+    expect(activity, contains('IntakeGate.EXTRA_TOKEN'));
+    expect(activity, contains('!= IntakeGate.token'));
+    expect(intakeActivity, contains('UUID.randomUUID()'));
+    expect(activity, contains('restored = savedInstanceState != null'));
+    expect(activity, contains('if (!restored) handleIntent(intent)'));
+  });
+
+  test('intent data never becomes a Flutter route', () {
+    expect(mainBlock, contains('android:name="flutter_deeplinking_enabled"'));
+    expect(RegExp(r'flutter_deeplinking_enabled"\s*android:value="false"').hasMatch(mainBlock), isTrue);
+  });
+
+  test('only content: URIs are read, and never one served by Glyph itself', () {
+    expect(intakeActivity, contains('uri.scheme != "content"'));
+    expect(intakeActivity, contains('authority == own || authority.startsWith("\$own.")'));
+    expect(activity, contains('IntakeGate.isAcceptable(uri, packageName)'));
+    expect(intakeActivity, contains('IntakeGate.isAcceptable(uri, packageName)'));
+    expect(activity + intakeActivity, isNot(contains('scheme != "content" && scheme != "file"')));
+  });
+
+  test('a stalled provider is cut off by a watchdog and never blocks a later share', () {
+    expect(activity, contains('READ_TIMEOUT_MS = 15_000L'));
+    expect(activity, contains('"kind" to "timeout"'));
+    expect(activity, contains('"kind" to "reading"'));
+    expect(activity, contains('thread(name = "glyph-intake-read", isDaemon = true)'));
+    expect(activity, isNot(contains('Executors')));
+    expect(activity, contains('open.get()?.close()'));
+  });
+
+  test('text extras are read as CharSequence; export excludes Glyph and keeps big PGNs out of EXTRA_TEXT', () {
+    expect(activity, contains('getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()'));
+    expect(activity, isNot(contains('getStringExtra(Intent.EXTRA_TEXT)')));
+    expect(activity, contains('Intent.EXTRA_EXCLUDE_COMPONENTS'));
+    expect(activity, contains('ComponentName(this, ShareIntakeActivity::class.java)'));
+    expect(activity, contains('MAX_EXTRA_TEXT_BYTES = 100 * 1024'));
+    expect(activity, contains('text.toByteArray(Charsets.UTF_8).size <= MAX_EXTRA_TEXT_BYTES'));
   });
 
   test('the FileProvider is private, grants per URI, and serves one cache folder only', () {

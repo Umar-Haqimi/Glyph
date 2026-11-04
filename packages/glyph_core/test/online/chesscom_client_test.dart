@@ -269,6 +269,24 @@ void main() {
       expect(fake.served['/pub/player/alice/games/2026/10'], 1, reason: 'the month body was transferred only once');
     });
 
+    test('an archive list over the cache cap is used but not stored', () async {
+      FakeChessCom(site, 'alice', sampleMonths([(2026, 10)], perMonth: 2)).install();
+      final inner = site.handler!;
+      site.handler = (req, seen) {
+        if (seen.path.endsWith('/games/archives')) {
+          return sendJson(req.response, {
+            'archives': [archiveUrl('alice', 2026, 10)],
+            'padding': 'x' * (Limits.maxOnlineCacheBodyBytes + 10),
+          }, headers: {'etag': 'W/"big"'});
+        }
+        return inner(req, seen);
+      };
+      final cache = InMemoryOnlineCache();
+      final outcome = await client(cache: cache).fetchGames('alice');
+      expect(outcome.games, isNotEmpty);
+      expect(cache.entries.keys.any((k) => k.endsWith('/games/archives')), isFalse);
+    });
+
     test('a changed month is fetched again and the cache is replaced', () async {
       final fake = FakeChessCom(site, 'alice', sampleMonths([(2026, 10)], perMonth: 3, variants: false))..install();
       final cache = InMemoryOnlineCache();

@@ -122,6 +122,7 @@ class OnlineImportController extends Notifier<OnlineImportState> {
   /// Starts (or restarts) the fetch for [username]. The name must already be
   /// valid; the clients check it again before any request.
   Future<void> fetch(String username) async {
+    if (state.importing) return; // the list must not change under a running import
     _token?.cancel();
     final token = _token = OnlineCancelToken();
     final run = ++_run;
@@ -213,10 +214,13 @@ class OnlineImportController extends Notifier<OnlineImportState> {
     final todo = state.importable;
     state = state.copyWith(importing: true);
     final service = ref.read(importServiceProvider);
+    // Read before the loop: `state` must not be touched once the screen is gone.
+    final username = state.username;
     final imported = <int>[];
     var failed = 0;
     try {
       for (final online in todo) {
+        if (!ref.mounted) break; // the screen was closed: stop saving
         final parsed = await parsePgnAsync(online.pgn);
         if (parsed.games.isEmpty) {
           failed++;
@@ -226,7 +230,7 @@ class OnlineImportController extends Notifier<OnlineImportState> {
           parsed.games.first,
           _gameSource,
           sourceId: online.sourceId,
-          userSide: online.sideOf(state.username),
+          userSide: online.sideOf(username),
         );
         if (!saved.duplicate) imported.add(saved.id);
       }

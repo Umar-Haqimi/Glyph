@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/providers.dart';
 import '../../data/repositories.dart';
 import '../../l10n/app_localizations.dart';
+import '../../platform/app_log.dart';
 import '../../routes.dart';
 import '../library/game_text.dart';
 import 'online_import_controller.dart';
@@ -61,7 +62,14 @@ class _OnlineImportScreenState extends ConsumerState<OnlineImportScreen> {
     final l10n = AppLocalizations.of(context);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final result = await ref.read(onlineImportProvider(_source).notifier).importSelected();
+    final OnlineImportResult result;
+    try {
+      result = await ref.read(onlineImportProvider(_source).notifier).importSelected();
+    } on Object catch (e) {
+      AppLog.warning('Importing online games failed', e);
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(l10n.onlineImportFailed)));
+      return;
+    }
     if (!mounted) return;
     if (result.importedIds.length == 1 && result.failed == 0) {
       // One game: straight to the board, where its analysis starts.
@@ -187,7 +195,7 @@ class _OnlineImportScreenState extends ConsumerState<OnlineImportScreen> {
                     : FilledButton(
                         key: const Key('onlineFetch'),
                         style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
-                        onPressed: _valid ? _fetch : null,
+                        onPressed: _valid && !state.importing ? _fetch : null,
                         child: Text(state.phase == OnlinePhase.done ? l10n.onlineFetchAgain : l10n.onlineFetch),
                       ),
               ),

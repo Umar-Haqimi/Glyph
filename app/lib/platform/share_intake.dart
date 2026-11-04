@@ -34,6 +34,17 @@ class SharedUnreadable extends SharedContent {
   const SharedUnreadable();
 }
 
+/// A stream is being read (a slow provider): the UI shows "Reading…" until the
+/// next event.
+class SharedReading extends SharedContent {
+  const SharedReading();
+}
+
+/// The provider did not deliver within the native deadline (15 s).
+class SharedTimedOut extends SharedContent {
+  const SharedTimedOut();
+}
+
 /// The Dart side of the share / open-with intake. An interface so tests can
 /// fake the platform.
 abstract interface class ShareIntakeService {
@@ -96,6 +107,10 @@ class ChannelShareIntakeService implements ShareIntakeService {
         return SharedFile(bytes);
       case 'tooLarge':
         return const SharedTooLarge();
+      case 'reading':
+        return const SharedReading();
+      case 'timeout':
+        return const SharedTimedOut();
       default:
         return const SharedUnreadable();
     }

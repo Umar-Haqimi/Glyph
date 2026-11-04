@@ -144,6 +144,7 @@ Future<ProviderContainer> pumpReview(
       supportedLocales: AppLocalizations.supportedLocales,
       home: BoardScreen(gameId: id, initialPly: initialPly),
       onGenerateRoute: Routes.onGenerateRoute,
+      onUnknownRoute: Routes.onUnknownRoute,
     ),
   ));
   await settleBoard(tester);

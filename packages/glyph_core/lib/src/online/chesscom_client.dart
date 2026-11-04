@@ -150,7 +150,7 @@ class ChessComClient implements OnlineGamesClient {
       throw const OnlineFetchException(OnlineFetchError(OnlineErrorKind.badResponse));
     }
     final newTag = etag;
-    if (!useCached && newTag != null && newTag.isNotEmpty) await _cachePut(key, CachedResponse(newTag, text));
+    if (!useCached && newTag != null && newTag.isNotEmpty && utf8.encode(text).length <= Limits.maxOnlineCacheBodyBytes) await _cachePut(key, CachedResponse(newTag, text));
     return months;
   }
 
@@ -215,7 +215,7 @@ class ChessComClient implements OnlineGamesClient {
         final status = response.statusCode;
         if (status == 304 && stored != null) return stored;
         if (status < 200 || status >= 300) throw OnlineFetchException(OnlineTransport.errorForStatus(status));
-        final bytes = Uint8List.fromList(await _transport.readAll(response, token));
+        final bytes = await _transport.readAll(response, token);
         if (token.isCancelled) throw const OnlineCancelled();
         final MonthResult parsed;
         try {

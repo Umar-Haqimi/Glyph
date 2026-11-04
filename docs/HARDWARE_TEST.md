@@ -98,7 +98,7 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 
 | # | Step | Expected | Result | Notes |
 |---|---|---|---|---|
-| G1 | `flutter build apk --release --split-per-abi` after M7, then `tool/check_permissions.sh` | Builds (Kotlin `MainActivity`, `androidx.core` FileProvider); permissions still `INTERNET` + the androidx signature permission only | | |
+| G1 | `flutter build apk --release --split-per-abi` after M7, then `tool/check_permissions.sh` | Builds (Kotlin `MainActivity` + `ShareIntakeActivity`, `androidx.core` FileProvider); permissions still `INTERNET` + the androidx signature permission only | | |
 | G2 | Import > From lichess with a real username (prefilled after Settings > Accounts) | Games stream in, speed chips filter, select two, Import: both in the library with the source "lichess" and the right side ("You") | | |
 | G3 | Import > From chess.com, a user with games in several months | 30 newest games, variants (bughouse, crazyhouse) absent, import works; fetch again right away is quick (ETag 304) | | |
 | G4 | Fetch twice for the same user, import, fetch again | Imported games show "In your library" and cannot be selected | | |
@@ -111,6 +111,12 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | G11 | Board > menu > Export PGN, and the card menu in the library | Share sheet shows a `.pgn` attachment named `White_vs_Black_date.pgn`; pick Gmail / Drive / lichess: content arrives, no storage permission prompt | | |
 | G12 | Paste the exported PGN into a lichess study ("Import PGN") | See E2; plus `adb shell run-as my.umarh.glyph ls cache/shared_pgn` holds only the last export | | |
 | G13 | TalkBack on the online list and the share screens | Each game is one checkbox reading players, details, selected state; the status line is announced when it changes | | |
+| G14 | Share a game as text from another app while Glyph is already running in its own task (Glyph in recents, then lichess app > Share > Glyph) | Glyph comes to the front with the picker; `adb shell dumpsys activity activities` shows ONE `MainActivity` and one task for `my.umarh.glyph`; `adb shell ps` shows one process; logcat has one `main()`, one Stockfish process (`pidof stockfish` / `ps -A | grep libstockfish`) | | |
+| G15 | Force-stop Glyph, then share a PGN text / open a `.pgn` (cold start) | Glyph starts in its own task and shows the picker once; Back leaves to the sender, not to a blank Glyph; opening Glyph from recents afterwards does not show the picker again | | |
+| G16 | Share to Glyph, leave it on the picker, `adb shell am kill my.umarh.glyph`, reopen from recents | Glyph restores to the library or board; the old share is NOT delivered again (no second picker, no duplicate import) | | |
+| G17 | Stalled provider: `.pgn` from a provider that never answers (e.g. a cloud-backed Files entry with airplane mode on, or a test provider that sleeps) | After about 0.5 s "Reading the shared file..." appears; after 15 s a dialog says reading took too long; a normal share made right afterwards works at once | | |
+| G18 | Deep-link data ignored: `adb shell am start -a android.intent.action.VIEW -d "content://x/y.pgn" -n my.umarh.glyph/.MainActivity`, `... -d "file:///sdcard/a.pgn" -a android.intent.action.VIEW my.umarh.glyph`, and `-d "/board" -n my.umarh.glyph/.MainActivity` | Nothing imports and no screen opens or stacks (explicit intents without the in-process token are ignored; `file:` is never offered Glyph in Open with); also a content URI of Glyph's own provider (`content://my.umarh.glyph.fileprovider/...`) via `ShareIntakeActivity` is dropped | | |
+| G19 | Export PGN: the share sheet | Glyph itself is not listed as a target; a 300 KB PGN still shares as a file (no text body) | | |
 
 ## Sign-off
 

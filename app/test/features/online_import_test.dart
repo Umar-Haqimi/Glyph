@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/app.dart';
 import 'package:glyph/data/in_memory.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/data/providers.dart';
 import 'package:glyph/features/board/board_screen.dart';
 import 'package:glyph/features/import/online_import_screen.dart';
 import 'package:glyph/features/library/library_screen.dart';
@@ -50,6 +51,33 @@ class _SlowSettings extends InMemorySettingsRepository {
     await gate;
     return super.get(key);
   }
+}
+
+/// A library whose `save` waits until the test opens the gate (a slow import).
+class GatedGames extends InMemoryGameRepository {
+  GatedGames(super.store);
+
+  final gate = Completer<void>();
+  final saveStarted = <String?>[];
+  Object? failWith;
+
+  @override
+  Future<SaveResult> save(NewGame game) async {
+    saveStarted.add(game.sourceId);
+    await gate.future;
+    if (failWith != null) throw failWith!;
+    return super.save(game);
+  }
+}
+
+Future<GatedGames> pumpGated(WidgetTester tester, TestEnv env) async {
+  final gated = GatedGames(env.store);
+  tester.view.physicalSize = const Size(800, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(ProviderScope(overrides: [...env.overrides.where((o) => !o.toString().contains('GameRepository')), gameRepositoryProvider.overrideWithValue(gated)], child: const GlyphApp()));
+  await tester.pumpAndSettle();
+  return gated;
 }
 
 void main() {
@@ -193,6 +221,61 @@ void main() {
       expect(bySource['aaaaaaa2']!.userSide, Side.black);
       expect(bySource['aaaaaaa1']!.plyCount, 10);
       expect(bySource['aaaaaaa1']!.whiteElo, 1500);
+    });
+
+    testWidgets('Fetch is disabled while an import runs', (tester) async {
+      final env = TestEnv(lichess: FakeOnlineClient.games([lichessOnline('aaaaaaa1'), lichessOnline('aaaaaaa2')]), book: realBook());
+      final gated = await pumpGated(tester, env);
+      await openOnline(tester, l10n.importFromLichess);
+      await typeName(tester, 'alice');
+      await fetch(tester);
+      expect(enabled(tester, 'onlineFetch'), isTrue);
+      await tester.tap(find.byKey(const Key('online-game-aaaaaaa1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onlineImport')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(gated.saveStarted, ['aaaaaaa1']);
+      expect(enabled(tester, 'onlineFetch'), isFalse);
+      gated.gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(BoardScreen), findsOneWidget);
+    });
+
+    testWidgets('closing the screen mid-import stops the loop without touching state', (tester) async {
+      final env = TestEnv(lichess: FakeOnlineClient.games([lichessOnline('aaaaaaa1'), lichessOnline('aaaaaaa2')]), book: realBook());
+      final gated = await pumpGated(tester, env);
+      await openOnline(tester, l10n.importFromLichess);
+      await typeName(tester, 'alice');
+      await fetch(tester);
+      await tester.tap(find.byKey(const Key('onlineSelectAll')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onlineImport')));
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+      gated.gate.complete();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(gated.saveStarted, ['aaaaaaa1'], reason: 'the second game is not saved after the screen is gone');
+      expect(find.byType(LibraryScreen), findsOneWidget);
+    });
+
+    testWidgets('an import that throws shows a message instead of crashing', (tester) async {
+      final env = TestEnv(lichess: FakeOnlineClient.games([lichessOnline('aaaaaaa1')]), book: realBook());
+      final gated = await pumpGated(tester, env);
+      gated.failWith = StateError('disk full');
+      await openOnline(tester, l10n.importFromLichess);
+      await typeName(tester, 'alice');
+      await fetch(tester);
+      await tester.tap(find.byKey(const Key('online-game-aaaaaaa1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('onlineImport')));
+      await tester.pump(const Duration(milliseconds: 50));
+      gated.gate.complete();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text(l10n.onlineImportFailed), findsOneWidget);
+      expect(find.byType(OnlineImportScreen), findsOneWidget);
     });
 
     testWidgets('exactly one game: straight to the board', (tester) async {

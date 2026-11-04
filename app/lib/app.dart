@@ -43,6 +43,7 @@ class GlyphApp extends ConsumerWidget {
           builder: (context, child) => ShareIntakeHost(navigatorKey: navigatorKey, child: child ?? const SizedBox.shrink()),
           initialRoute: Routes.library,
           onGenerateRoute: Routes.onGenerateRoute,
+          onUnknownRoute: Routes.onUnknownRoute,
         );
       },
     );

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
 import '../../l10n/app_localizations.dart';
+import '../../platform/app_log.dart';
 import '../../platform/share_intake.dart';
 import 'import_preview_screen.dart';
 import 'pgn_issue_text.dart';
@@ -25,6 +26,9 @@ enum ShareProblem {
 
   /// Text with no chess game in it.
   noGame,
+
+  /// The provider stalled past the native deadline.
+  timeout,
 }
 
 /// What to do with [SharedContent]: show the games to pick from, or tell the
@@ -69,6 +73,11 @@ Future<ShareDecision> decideShare(SharedContent content) async {
       return const ShareRefused(ShareProblem.tooLarge);
     case SharedUnreadable():
       return const ShareRefused(ShareProblem.unreadable);
+    case SharedTimedOut():
+      return const ShareRefused(ShareProblem.timeout);
+    case SharedReading():
+      // Not a result; the host shows a progress note and waits for the next event.
+      return const ShareRefused(ShareProblem.unreadable);
     case SharedFile(:final bytes):
       return _decide(await parsePgnBytesAsync(bytes), null);
     case SharedText(:final text):
@@ -89,9 +98,12 @@ ShareDecision _decide(PgnParseResult result, String? text) {
 /// the import flow: the same game picker and Save as the file flow (source
 /// "share"), then the board. Wrap the app's navigator with it.
 class ShareIntakeHost extends ConsumerStatefulWidget {
-  const ShareIntakeHost({super.key, required this.navigatorKey, required this.child});
+  const ShareIntakeHost({super.key, required this.navigatorKey, required this.child, this.decide = decideShare});
 
   final GlobalKey<NavigatorState> navigatorKey;
+
+  /// [decideShare]; a parameter so tests can make one share fail.
+  final Future<ShareDecision> Function(SharedContent content) decide;
   final Widget child;
 
   @override
@@ -106,7 +118,12 @@ class _ShareIntakeHostState extends ConsumerState<ShareIntakeHost> {
   void initState() {
     super.initState();
     final service = ref.read(shareIntakeServiceProvider);
-    _sub = service.shared.listen((content) => _queue = _queue.then((_) => _handle(content)));
+    _sub = service.shared.listen((content) {
+      // One failing share must not stop the later ones: errors are caught per item.
+      _queue = _queue.then((_) => _handle(content)).catchError((Object e) {
+        AppLog.warning('Handling a shared item failed', e);
+      });
+    });
     // After the first frame the navigator exists, so the launching intent can
     // be routed the moment it arrives.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -121,7 +138,23 @@ class _ShareIntakeHostState extends ConsumerState<ShareIntakeHost> {
   }
 
   Future<void> _handle(SharedContent content) async {
-    final decision = await decideShare(content);
+    final messenger = widget.navigatorKey.currentContext == null
+        ? null
+        : ScaffoldMessenger.maybeOf(widget.navigatorKey.currentContext!);
+    if (content is SharedReading) {
+      final ctx = widget.navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(SnackBar(
+          key: const Key('shareReading'),
+          duration: const Duration(seconds: 30),
+          content: Text(AppLocalizations.of(ctx).shareReading),
+        ));
+      }
+      return;
+    }
+    messenger?.hideCurrentSnackBar();
+    final decision = await widget.decide(content);
     final navigator = widget.navigatorKey.currentState;
     final context = widget.navigatorKey.currentContext;
     if (!mounted || navigator == null || context == null || !context.mounted) return;
@@ -138,6 +171,7 @@ class _ShareIntakeHostState extends ConsumerState<ShareIntakeHost> {
           ShareProblem.unreadable => l10n.shareReadFailed,
           ShareProblem.link => l10n.shareLinkNotSupported,
           ShareProblem.noGame => l10n.shareNoGame,
+          ShareProblem.timeout => l10n.shareReadTimeout,
         }));
       case ShareInvalid(:final issue):
         unawaited(_notice(context, pgnIssueText(l10n, issue)));

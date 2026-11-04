@@ -13,8 +13,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
+            android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -27,10 +26,29 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Intent data must never become a Flutter route (docs/DECISIONS.md, M7 review fixes). -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
+        <!-- Entry point of every Share / Open with (SPEC F2). A chooser or Open with starts the
+             target in the sender's task; MainActivity would then run a second FlutterEngine, a
+             second sqlite connection and a second Stockfish in the same process. This activity has
+             no UI: it checks the payload, hands it to MainActivity (NEW_TASK | CLEAR_TOP |
+             SINGLE_TOP, read grant forwarded) and finishes. MainActivity is exported only because
+             the launcher needs it; it ignores any intent that does not carry this process's token.
+             No taskAffinity override: MainActivity is singleTask in the app's own task. -->
+        <activity
+            android:name=".ShareIntakeActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="standard">
             <!-- Share a game as text (lichess / chess.com app share, any app). The text may be a
                  PGN or a link; links are not fetched (docs/DECISIONS.md, M7). -->
             <intent-filter>
@@ -46,13 +64,12 @@
                 <data android:mimeType="application/vnd.chess-pgn"/>
                 <data android:mimeType="text/x-chess-pgn"/>
             </intent-filter>
-            <!-- Open with: a PGN mime type (content or file URI). -->
+            <!-- Open with: a PGN mime type (content URI; the file scheme is not accepted). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="content"/>
-                <data android:scheme="file"/>
                 <data android:mimeType="application/x-chess-pgn"/>
                 <data android:mimeType="application/vnd.chess-pgn"/>
                 <data android:mimeType="text/x-chess-pgn"/>
@@ -65,7 +82,6 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="content"/>
-                <data android:scheme="file"/>
                 <data android:mimeType="*/*"/>
                 <data android:host="*"/>
                 <data android:pathPattern=".*\\.pgn"/>

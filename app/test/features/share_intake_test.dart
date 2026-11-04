@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/data/models.dart';
 import 'package:glyph/features/board/board_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glyph/features/import/import_preview_screen.dart';
+import 'package:glyph/features/library/library_screen.dart';
+import 'package:glyph/l10n/app_localizations.dart';
+import 'package:glyph/routes.dart';
 import 'package:glyph/features/import/share_intake.dart';
 import 'package:glyph/platform/share_intake.dart';
 import 'package:glyph_core/glyph_core.dart';
@@ -228,6 +233,87 @@ void main() {
       env.intake.push(SharedText(vectorPgn('chesscom_app_share.pgn')));
       await tester.pumpAndSettle();
       expect(find.byType(ImportPreviewScreen, skipOffstage: false), findsNWidgets(2));
+    });
+  });
+
+  group('review fixes', () {
+    test('decode: reading and timeout', () {
+      expect(ChannelShareIntakeService.decode({'kind': 'reading'}), isA<SharedReading>());
+      expect(ChannelShareIntakeService.decode({'kind': 'timeout'}), isA<SharedTimedOut>());
+    });
+
+    testWidgets('a slow provider shows Reading..., then the result replaces it', (tester) async {
+      final env = TestEnv();
+      await env.pump(tester);
+      env.intake.push(const SharedReading());
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(l10n.shareReading), findsOneWidget);
+      env.intake.push(const SharedText('[Event "x"]\n\n1. e4 e5 *'));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.shareReading), findsNothing);
+      expect(find.byType(ImportPreviewScreen), findsOneWidget);
+    });
+
+    testWidgets('a timed-out read has its own message', (tester) async {
+      final env = TestEnv();
+      await env.pump(tester);
+      env.intake.push(const SharedReading());
+      await tester.pump();
+      env.intake.push(const SharedTimedOut());
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.shareReadTimeout), findsOneWidget);
+      expect(find.text(l10n.shareReading), findsNothing);
+    });
+
+    testWidgets('one share that throws does not stop the next ones', (tester) async {
+      final fake = FakeShareIntake();
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final seen = <String>[];
+      await tester.pumpWidget(ProviderScope(
+        overrides: [shareIntakeServiceProvider.overrideWithValue(fake)],
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => ShareIntakeHost(
+            navigatorKey: navigatorKey,
+            decide: (content) async {
+              final text = (content as SharedText).text;
+              seen.add(text);
+              if (text == 'boom') throw StateError('boom');
+              return const ShareRefused(ShareProblem.noGame);
+            },
+            child: child!,
+          ),
+          home: const Scaffold(),
+        ),
+      ));
+      await tester.pump();
+      fake.push(const SharedText('boom'));
+      fake.push(const SharedText('after'));
+      await tester.pumpAndSettle();
+      expect(seen, ['boom', 'after']);
+      expect(find.text(l10n.shareNoGame), findsOneWidget);
+    });
+  });
+
+  group('routes', () {
+    test('unknown names build nothing; known ones do', () {
+      expect(Routes.onGenerateRoute(const RouteSettings(name: '/content://x/y.pgn')), isNull);
+      expect(Routes.onGenerateRoute(const RouteSettings(name: '/nope')), isNull);
+      expect(Routes.onGenerateRoute(const RouteSettings(name: Routes.about)), isNotNull);
+    });
+
+    testWidgets('pushing an unknown name does not stack a second Library', (tester) async {
+      final env = TestEnv();
+      await env.pump(tester);
+      expect(find.byType(LibraryScreen), findsOneWidget);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.pushNamed('/content://evil/x'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LibraryScreen, skipOffstage: false), findsOneWidget);
+      expect(navigator.canPop(), isFalse, reason: 'the unknown route removed itself');
     });
   });
 }

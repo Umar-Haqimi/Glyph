@@ -26,6 +26,11 @@ class Db {
 
   void _init() {
     raw.execute('PRAGMA foreign_keys = ON');
+    // Defence in depth: should a second process ever open the file, wait for
+    // the lock instead of failing with SQLITE_BUSY. WAL lets readers and the
+    // writer overlap (a no-op for in-memory databases).
+    raw.execute('PRAGMA busy_timeout = 5000');
+    raw.execute('PRAGMA journal_mode = WAL');
     _migrate();
   }
 

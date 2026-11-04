@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -152,13 +153,14 @@ class OnlineTransport {
   }
 
   /// Collects the whole body (capped).
-  Future<List<int>> readAll(http.StreamedResponse response, OnlineCancelToken token) async {
-    final out = <int>[];
+  Future<Uint8List> readAll(http.StreamedResponse response, OnlineCancelToken token) async {
+    // copy: false keeps the chunks as they are (a growable List<int> costs 8 bytes per byte).
+    final out = BytesBuilder(copy: false);
     await readChunks(response, token, (chunk) {
-      out.addAll(chunk);
+      out.add(chunk);
       return false;
     });
-    return out;
+    return out.takeBytes();
   }
 
   /// The error for a non-2xx [status] (404 is [notFound], default
@@ -169,13 +171,35 @@ class OnlineTransport {
     return OnlineFetchError(OnlineErrorKind.server, status: status);
   }
 
-  /// At least [rateLimitWait], more if `Retry-After` (seconds) asks for it,
-  /// never more than [Limits.maxRateLimitWait].
-  Duration _waitFor(http.StreamedResponse response) {
+  /// At least [rateLimitWait], more if `Retry-After` (seconds, or an HTTP-date)
+  /// asks for it, never more than [Limits.maxRateLimitWait]. An unreadable
+  /// value counts as absent.
+  Duration _waitFor(http.StreamedResponse response, {DateTime? now}) {
     var wait = rateLimitWait;
-    final seconds = int.tryParse((response.headers['retry-after'] ?? '').trim());
-    if (seconds != null && seconds > 0 && Duration(seconds: seconds) > wait) wait = Duration(seconds: seconds);
+    final header = (response.headers['retry-after'] ?? '').trim();
+    Duration? asked;
+    final seconds = int.tryParse(header);
+    if (seconds != null) {
+      if (seconds > 0) asked = Duration(seconds: seconds > 86400 ? 86400 : seconds);
+    } else if (header.isNotEmpty) {
+      final at = _parseHttpDate(header);
+      if (at != null) asked = at.difference((now ?? DateTime.now()).toUtc());
+    }
+    if (asked != null && asked > wait) wait = asked;
     return wait > Limits.maxRateLimitWait ? Limits.maxRateLimitWait : wait;
+  }
+
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  static final _httpDate = RegExp(r'^[A-Za-z]{3}, (\d{2}) ([A-Za-z]{3}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$');
+
+  /// An RFC 9110 IMF-fixdate (`Wed, 21 Oct 2026 07:28:00 GMT`), the form
+  /// servers send; anything else is null.
+  static DateTime? _parseHttpDate(String value) {
+    final m = _httpDate.firstMatch(value);
+    if (m == null) return null;
+    final month = _months.indexOf(m.group(2)!);
+    if (month < 0) return null;
+    return DateTime.utc(int.parse(m.group(3)!), month + 1, int.parse(m.group(1)!), int.parse(m.group(4)!), int.parse(m.group(5)!), int.parse(m.group(6)!));
   }
 
   Future<void> _backoff(
