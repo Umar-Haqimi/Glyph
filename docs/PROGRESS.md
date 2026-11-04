@@ -225,3 +225,10 @@ Notes for M8:
 - Error copy for the online fetch exists for every `OnlineErrorKind` (`onlineError*` in the ARB); M8's "all error copy wired" pass should only need to review wording.
 - Settings still lacks the Engine and general F19 sections; Accounts is in place.
 - Run the device checklist section G first; if `MainActivity.kt` fails to compile, the likely culprits are the `androidx.core` import (FileProvider) and the `use { return ... }` non-local return in `readCapped`.
+
+### Release build verified (after M7 review fixes)
+- `flutter build apk --release --split-per-abi` passes in the cloud container (Android SDK platform 36, build-tools 36.0.0, NDK/CMake fetched by Gradle): armeabi-v7a 26.9 MB, arm64-v8a 30.6 MB, x86_64 32.3 MB. First real compile of `MainActivity.kt` / `ShareIntakeActivity.kt`: no errors.
+- `tool/check_permissions.sh`: OK on all three APKs (`INTERNET` + allowlisted `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`).
+- Merged manifest checked with `aapt2 dump xmltree`: `MainActivity` singleTask with only MAIN/LAUNCHER and `flutter_deeplinking_enabled`; `ShareIntakeActivity` owns SEND/VIEW (`content:` only); FileProvider not exported.
+- Container note: Maven Central returned 429 through the egress proxy, so the container used a user-level Gradle init script (`~/.gradle/init.d`, not in the repo) that rewrites `repo.maven.apache.org` to Google's Maven Central mirror. CI and dev machines are unaffected.
+- Still not verified: on-device behaviour (HARDWARE_TEST sections D, G) and real Stockfish 19.
