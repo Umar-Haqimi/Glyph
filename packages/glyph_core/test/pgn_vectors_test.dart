@@ -337,6 +337,32 @@ void main() {
     });
   });
 
+  group('splitter regressions (M2 review)', () {
+    const game = '[Event "A"]\n[White "W"]\n\n1. e4 e5 2. Nf3 *\n';
+
+    test('an unclosed variation does not swallow the following games', () {
+      final r = parsePgn(
+        '[Event "A"]\n\n1. e4 e5 (1... c5 2. Nf3 *\n\n[Event "B"]\n\n1. d4 d5 *\n\n[Event "C"]\n\n1. c4 *',
+      );
+      expect(r.games.map((g) => g.headers['Event']), ['A', 'B', 'C']);
+      expect(r.games.map((g) => g.plyCount), [2, 2, 1]);
+    });
+
+    test('parentheses in a share-text preamble do not eat the headers', () {
+      for (final preamble in [
+        'Check out my game (vs Hikaru)!\nhttps://chess.com/game/live/1\n\n',
+        'Check out my game (vs Hikaru!\n\n',
+        'Look ) at this\n\n',
+        'Analyze this (1-0) win\n\n',
+      ]) {
+        final g = single(parsePgn('$preamble$game'));
+        expect(g.headers['Event'], 'A', reason: preamble);
+        expect(g.white, 'W', reason: preamble);
+        expect(g.plyCount, 3, reason: preamble);
+      }
+    });
+  });
+
   group('round trip', () {
     const files = [
       'chesscom_download_clk.pgn',

@@ -89,7 +89,10 @@ PgnSplit splitPgn(String text, {int maxGames = Limits.maxGamesPerFile}) {
       i = eol + 1;
       continue;
     }
-    if (paren == 0 && _headerStart.matchAsPrefix(text, i) != null) {
+    // A tag line at the start of a line is a boundary even inside an unclosed
+    // variation: movetext never starts a line with a tag pair, and a stray `(`
+    // must not swallow every game after it.
+    if (_headerStart.matchAsPrefix(text, i) != null) {
       emitPending();
       if (hasMoves || afterResult) flush();
       hasHeader = true;
@@ -154,6 +157,10 @@ PgnSplit splitPgn(String text, {int maxGames = Limits.maxGamesPerFile}) {
       if (c == 0x3B /* ; */) {
         final e = text.indexOf('\n', i);
         i = e < 0 ? n : e;
+        continue;
+      }
+      if ((c == 0x28 || c == 0x29) && !hasHeader && !hasMoves) {
+        i++; // parentheses in a share-text preamble are not movetext
         continue;
       }
       if (c == 0x28 /* ( */) {
