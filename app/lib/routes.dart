@@ -4,6 +4,7 @@ import 'features/about/about_screen.dart';
 import 'features/board/board_screen.dart';
 import 'features/library/library_screen.dart';
 import 'features/report/report_screen.dart';
+import 'features/settings/llm_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 
 /// Named routes. Plain Navigator, no routing package.
@@ -16,6 +17,7 @@ abstract final class Routes {
   static const String report = '/report';
   static const String settings = '/settings';
   static const String about = '/about';
+  static const String llmSettings = '/settings/llm';
 
   static Route<void> onGenerateRoute(RouteSettings settings) {
     final WidgetBuilder builder = switch (settings.name) {
@@ -24,6 +26,7 @@ abstract final class Routes {
       report => (_) => ReportScreen(gameId: settings.arguments as int?),
       Routes.settings => (_) => const SettingsScreen(),
       about => (_) => const AboutScreen(),
+      llmSettings => (_) => const LlmSettingsScreen(),
       _ => (_) => const LibraryScreen(),
     };
     return MaterialPageRoute<void>(builder: builder, settings: settings);

@@ -11,12 +11,16 @@ import 'move_badge.dart';
 /// Brilliant / Great / Miss / Inaccuracy / Mistake / Blunder, outlined
 /// otherwise; available on every move).
 class CoachCard extends StatelessWidget {
-  const CoachCard({super.key, required this.line, required this.showExplain});
+  const CoachCard({super.key, required this.line, required this.showExplain, required this.gameId, required this.ply});
 
   final CoachLine line;
 
   /// False at the start position (nothing to explain).
   final bool showExplain;
+
+  /// The game and the 1-based ply the Explain button explains.
+  final int gameId;
+  final int ply;
 
   @override
   Widget build(BuildContext context) {
@@ -79,12 +83,12 @@ class CoachCard extends StatelessWidget {
                     child: emphasised
                         ? FilledButton.tonal(
                             key: const Key('explain-button'),
-                            onPressed: () => showExplainSheet(context),
+                            onPressed: () => showExplainSheet(context, gameId: gameId, ply: ply),
                             child: Text(l10n.boardExplain),
                           )
                         : OutlinedButton(
                             key: const Key('explain-button'),
-                            onPressed: () => showExplainSheet(context),
+                            onPressed: () => showExplainSheet(context, gameId: gameId, ply: ply),
                             child: Text(l10n.boardExplain),
                           ),
                   ),

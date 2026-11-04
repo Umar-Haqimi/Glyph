@@ -96,7 +96,12 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
   }
 
   @override
-  Future<void> delete(int id) async => _db.raw.execute('DELETE FROM games WHERE id = ?', [id]);
+  Future<void> delete(int id) async {
+    _db.transaction(() {
+      _db.raw.execute('DELETE FROM llm_cache WHERE game_id = ?', [id]);
+      _db.raw.execute('DELETE FROM games WHERE id = ?', [id]);
+    });
+  }
 
   @override
   Future<void> setUserSide(int id, Side? side) async =>
@@ -284,8 +289,57 @@ VALUES (?, ?, ?, ?, ?, ?, ?)''');
       _db.raw.execute('DELETE FROM position_lines WHERE game_id = ?', [gameId]);
       _db.raw.execute('DELETE FROM move_labels WHERE game_id = ?', [gameId]);
       _db.raw.execute('DELETE FROM analyses WHERE game_id = ?', [gameId]);
+      // The engine lines are about to change: explanations built on them go.
+      _db.raw.execute('DELETE FROM llm_cache WHERE game_id = ?', [gameId]);
     });
   }
+}
+
+class SqliteLlmCacheRepository implements LlmCacheRepository {
+  SqliteLlmCacheRepository(this._db);
+
+  final Db _db;
+
+  @override
+  Future<CachedLlmText?> get(String key) async {
+    final rows = _db.raw.select('SELECT * FROM llm_cache WHERE key = ?', [key]);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return CachedLlmText(
+      key: r['key'] as String,
+      kind: PromptKind.values.byName(r['kind'] as String),
+      content: r['content'] as String,
+      model: r['model'] as String,
+      createdAt: r['created_at'] as int,
+      gameId: r['game_id'] as int?,
+    );
+  }
+
+  @override
+  Future<void> put(CachedLlmText e, {int maxEntries = LlmCacheRepository.defaultMaxEntries}) async {
+    _db.transaction(() {
+      _db.raw.execute(
+        'INSERT INTO llm_cache (key, kind, content, model, created_at, game_id) VALUES (?, ?, ?, ?, ?, ?) '
+        'ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, content = excluded.content, '
+        'model = excluded.model, created_at = excluded.created_at, game_id = excluded.game_id',
+        [e.key, e.kind.name, e.content, e.model, e.createdAt, e.gameId],
+      );
+      _db.raw.execute(
+        'DELETE FROM llm_cache WHERE key IN '
+        '(SELECT key FROM llm_cache ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?)',
+        [maxEntries],
+      );
+    });
+  }
+
+  @override
+  Future<int> deleteForGame(int gameId) async {
+    _db.raw.execute('DELETE FROM llm_cache WHERE game_id = ?', [gameId]);
+    return _db.raw.updatedRows;
+  }
+
+  @override
+  Future<int> count() async => _db.raw.select('SELECT COUNT(*) AS n FROM llm_cache').first['n'] as int;
 }
 
 class SqliteSettingsRepository implements SettingsRepository {

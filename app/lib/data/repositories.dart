@@ -77,6 +77,23 @@ abstract interface class AnalysisRepository {
   Future<int> pauseInterrupted({required int updatedAt});
 }
 
+/// Saved explanations and summaries (SPEC trap 17: keyed by `CacheKey.of`).
+abstract interface class LlmCacheRepository {
+  Future<CachedLlmText?> get(String key);
+
+  /// Inserts or replaces the entry with that key (Regenerate overwrites) and
+  /// trims the table to [maxEntries], oldest first.
+  Future<void> put(CachedLlmText entry, {int maxEntries = defaultMaxEntries});
+
+  /// Removes everything cached for [gameId] (the game was deleted or is being
+  /// re-analysed). Returns how many rows went.
+  Future<int> deleteForGame(int gameId);
+
+  Future<int> count();
+
+  static const int defaultMaxEntries = 500;
+}
+
 /// Plain key/value settings. Never holds secrets (SPEC 5.4).
 abstract interface class SettingsRepository {
   Future<String?> get(String key);
@@ -94,4 +111,17 @@ abstract final class SettingsKeys {
   static const engineDepthPreset = 'engine_depth_preset';
   static const engineThreads = 'engine_threads';
   static const engineHashMb = 'engine_hash_mb';
+
+  // Explanations (SPEC F13, F14, F12). Never the API key: that lives in the
+  // secret store only.
+  static const llmProvider = 'llm_provider';
+  static const llmBaseUrl = 'llm_base_url';
+  static const llmModel = 'llm_model';
+  static const llmTokenMode = 'llm_token_mode';
+  static const llmTokenValue = 'llm_token_value';
+  static const explainLanguage = 'explain_language';
+  static const explainTone = 'explain_tone';
+  static const explainAudience = 'explain_audience';
+  static const summaryEnabled = 'summary_enabled';
+  static const summaryAuto = 'summary_auto';
 }

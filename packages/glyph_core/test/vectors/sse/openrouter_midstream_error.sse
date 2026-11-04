@@ -1,0 +1,17 @@
+: SYNTHETIC vector: hand-built from the documented format, NOT a real capture (docs/m0/VECTORS.md section 4)
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":"Nx"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":"e5"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":" loses"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":" a"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":" knight"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225600","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"choices":[{"index":0,"delta":{"role":"assistant","content":" —"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-SYNTHETIC-1767225601","provider":"OpenAI","model":"openai/gpt-4o-mini","object":"chat.completion.chunk","created":1767225600,"error":{"code":"server_error","message":"Provider disconnected unexpectedly"},"choices":[{"index":0,"delta":{"content":""},"finish_reason":"error"}]}
+

@@ -22,6 +22,11 @@ void main() {
       expect(Limits.maxLlmStreamBytes, 32 * 1024);
     });
 
+    test('SSE event and error body caps', () {
+      expect(Limits.maxSseEventBytes, 256 * 1024);
+      expect(Limits.maxLlmErrorBodyBytes, 64 * 1024);
+    });
+
     test('timeouts: connect 15 s, first byte 60 s, total 180 s', () {
       expect(Limits.connectTimeout, const Duration(seconds: 15));
       expect(Limits.firstByteTimeout, const Duration(seconds: 60));

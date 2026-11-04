@@ -1,0 +1,190 @@
+{
+  "synthetic": true,
+  "note": "SYNTHETIC vector: hand-built from the documented format, NOT a real capture (docs/m0/VECTORS.md section 4)",
+  "vectors": [
+    {
+      "file": "openai_ok.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "openai_usage.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "openai_length.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...",
+      "finishReason": "length",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "openai_midstream_error.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight —",
+      "finishReason": null,
+      "errorKind": "server",
+      "note": null
+    },
+    {
+      "file": "openrouter_ok.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "openrouter_midstream_error.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight —",
+      "finishReason": null,
+      "errorKind": "server",
+      "note": null
+    },
+    {
+      "file": "ollama_ok.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "ollama_reasoning.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": null
+    },
+    {
+      "file": "crlf_multiline.sse",
+      "type": "stream",
+      "text": "Nxe5 loses a knight — after ...Nxe5, you are three points down (日本語 café ♞).\nBetter was d3.",
+      "finishReason": "stop",
+      "errorKind": null,
+      "note": "CRLF, multi-line data, id/event/retry fields, comment, lone CR"
+    },
+    {
+      "file": "openai_401.http",
+      "type": "http",
+      "status": 401,
+      "errorKind": "unauthorized",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openai_404_model.http",
+      "type": "http",
+      "status": 404,
+      "errorKind": "modelNotFound",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openai_429_rate.http",
+      "type": "http",
+      "status": 429,
+      "errorKind": "rateLimited",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openai_429_quota.http",
+      "type": "http",
+      "status": 429,
+      "errorKind": "quotaExceeded",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openai_400_unsupported_param.http",
+      "type": "http",
+      "status": 400,
+      "errorKind": "unsupportedParam",
+      "param": "max_tokens",
+      "note": null
+    },
+    {
+      "file": "openai_400_unsupported_value.http",
+      "type": "http",
+      "status": 400,
+      "errorKind": "unsupportedParam",
+      "param": "temperature",
+      "note": null
+    },
+    {
+      "file": "openai_500.http",
+      "type": "http",
+      "status": 500,
+      "errorKind": "server",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openai_503_html.http",
+      "type": "http",
+      "status": 503,
+      "errorKind": "server",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openrouter_401.http",
+      "type": "http",
+      "status": 401,
+      "errorKind": "unauthorized",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openrouter_402.http",
+      "type": "http",
+      "status": 402,
+      "errorKind": "quotaExceeded",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openrouter_400_model.http",
+      "type": "http",
+      "status": 400,
+      "errorKind": "modelNotFound",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "openrouter_429.http",
+      "type": "http",
+      "status": 429,
+      "errorKind": "rateLimited",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "ollama_404_model.http",
+      "type": "http",
+      "status": 404,
+      "errorKind": "modelNotFound",
+      "param": null,
+      "note": null
+    },
+    {
+      "file": "ollama_404_path.http",
+      "type": "http",
+      "status": 404,
+      "errorKind": "endpointNotFound",
+      "param": null,
+      "note": "wrong base URL (no /v1)"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+HTTP/1.1 404 Not Found
+content-type: application/json; charset=utf-8
+x-glyph-synthetic: true
+
+{"error":{"message":"The model `gpt-9` does not exist or you do not have access to it.","type":"invalid_request_error","param":null,"code":"model_not_found"}}

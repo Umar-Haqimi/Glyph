@@ -1,0 +1,5 @@
+HTTP/1.1 402 Payment Required
+content-type: application/json
+x-glyph-synthetic: true
+
+{"error":{"message":"Insufficient credits. Add more using https://openrouter.ai/credits","code":402}}

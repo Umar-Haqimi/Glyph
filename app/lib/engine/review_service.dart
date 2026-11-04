@@ -4,6 +4,25 @@ import '../data/models.dart';
 import '../data/repositories.dart';
 import '../platform/app_log.dart';
 
+/// A finished analysis read back from storage, with its review.
+class LoadedReview {
+  const LoadedReview({
+    required this.record,
+    required this.analysis,
+    required this.game,
+    required this.lines,
+    required this.review,
+  });
+
+  final GameRecord record;
+  final AnalysisRecord analysis;
+  final Game game;
+
+  /// Engine lines per position (0 = start), White POV.
+  final Map<int, List<EngineLine>> lines;
+  final GameReview review;
+}
+
 /// Turns a finished analysis into move labels and accuracy (SPEC F5, F6):
 /// reads the stored engine lines, runs `reviewGame` from `glyph_core` and
 /// persists the result (`move_labels`, `analyses.white_accuracy` /
@@ -29,11 +48,12 @@ class ReviewService {
   final Future<OpeningBook> Function() book;
   final ClassifierConfig config;
 
-  /// Classifies [gameId] if its analysis is `completed`, and stores the
-  /// labels and accuracies. Returns the review, or null when there is nothing
-  /// to classify (no game, unfinished analysis, unreadable PGN, a position
-  /// without stored lines, or the analysis was restarted while this ran).
-  Future<GameReview?> classify(int gameId) async {
+  /// Reads the stored game and engine lines of a **completed** analysis and
+  /// runs the review (labels, accuracy, key moments, opening) without
+  /// storing anything. Null when there is nothing to review: no game, an
+  /// unfinished analysis, an unreadable PGN, or a position without stored
+  /// lines. The game summary (M6) builds its prompt from this.
+  Future<LoadedReview?> load(int gameId) async {
     final record = await games.get(gameId);
     final analysis = await analyses.get(gameId);
     if (record == null || analysis == null || analysis.status != AnalysisStatus.completed) return null;
@@ -63,6 +83,17 @@ class ReviewService {
     }
 
     final review = reviewGame(game, lines, book: await book(), config: config);
+    return LoadedReview(record: record, analysis: analysis, game: game, lines: lines, review: review);
+  }
+
+  /// Classifies [gameId] if its analysis is `completed`, and stores the
+  /// labels and accuracies. Returns the review, or null when there is nothing
+  /// to classify (see [load]) or the analysis was restarted while this ran.
+  Future<GameReview?> classify(int gameId) async {
+    final loaded = await load(gameId);
+    if (loaded == null) return null;
+    final review = loaded.review;
+    final analysis = loaded.analysis;
 
     // One transaction, guarded by the snapshot the review was computed from:
     // if a re-analysis cleared / restarted / re-completed the row meanwhile,

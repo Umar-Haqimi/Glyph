@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import '../data/models.dart';
 import '../data/providers.dart';
 import '../features/library/library_controller.dart';
+import '../features/explain/summary_controller.dart';
 import '../features/settings/engine_settings.dart';
 import '../platform/app_log.dart';
 import 'engine_service.dart';
@@ -148,7 +149,17 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
         unawaited(
           _review
               .classify(id)
-              .then((_) {}, onError: (Object e) => AppLog.warning('Classifying a finished analysis failed', e))
+              .then((review) {
+                // The analysis is done and labelled: start the automatic game
+                // summary in the background (SPEC F12). It has its own
+                // request and a failure only shows in the report.
+                if (review == null || !ref.mounted) return;
+                try {
+                  unawaited(ref.read(summaryProvider(id).notifier).autoGenerate());
+                } on Object catch (e) {
+                  AppLog.warning('Starting the game summary failed', e);
+                }
+              }, onError: (Object e) => AppLog.warning('Classifying a finished analysis failed', e))
               .whenComplete(() => _refresh(id)),
         );
       } else {

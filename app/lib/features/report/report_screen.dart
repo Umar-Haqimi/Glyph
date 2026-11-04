@@ -6,10 +6,12 @@ import '../../l10n/app_localizations.dart';
 import '../board/board_data.dart';
 import '../board/eval_graph.dart';
 import '../board/move_badge.dart';
+import 'summary_card.dart';
 
 /// Report card (SPEC F6 / section 4, screen 4): accuracy per player, label
 /// counts per side, the opening and the eval graph. Tapping the graph returns
-/// the picked ply to the board. The game summary block belongs to M6.
+/// the picked ply to the board. The game summary block (M6) sits below the
+/// graph.
 class ReportScreen extends ConsumerStatefulWidget {
   const ReportScreen({super.key, this.gameId, this.initialPly = 0});
 
@@ -52,6 +54,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                   height: 120,
                   onSelect: (p) => setState(() => _ply = p),
                 ),
+                const SizedBox(height: 16),
+                SummaryCard(gameId: data.record.id, analysisComplete: data.analysisComplete),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,

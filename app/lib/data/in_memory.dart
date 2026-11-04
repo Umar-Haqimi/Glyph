@@ -11,6 +11,7 @@ class InMemoryStore {
   final Map<(int, int, int), PositionLineRecord> lines = {};
   final Map<(int, int), MoveLabelRecord> labels = {};
   final Map<String, String> settings = {};
+  final Map<String, CachedLlmText> llmCache = {};
   int nextId = 1;
 }
 
@@ -67,6 +68,7 @@ class InMemoryGameRepository implements GameRepository {
     store.analyses.remove(id);
     store.lines.removeWhere((k, _) => k.$1 == id);
     store.labels.removeWhere((k, _) => k.$1 == id);
+    store.llmCache.removeWhere((_, v) => v.gameId == id);
   }
 
   @override
@@ -187,7 +189,37 @@ class InMemoryAnalysisRepository implements AnalysisRepository {
     store.analyses.remove(gameId);
     store.lines.removeWhere((k, _) => k.$1 == gameId);
     store.labels.removeWhere((k, _) => k.$1 == gameId);
+    store.llmCache.removeWhere((_, v) => v.gameId == gameId);
   }
+}
+
+class InMemoryLlmCacheRepository implements LlmCacheRepository {
+  InMemoryLlmCacheRepository([InMemoryStore? store]) : store = store ?? InMemoryStore();
+
+  final InMemoryStore store;
+
+  @override
+  Future<CachedLlmText?> get(String key) async => store.llmCache[key];
+
+  @override
+  Future<void> put(CachedLlmText entry, {int maxEntries = LlmCacheRepository.defaultMaxEntries}) async {
+    store.llmCache.remove(entry.key);
+    store.llmCache[entry.key] = entry;
+    final byAge = store.llmCache.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    for (final old in byAge.skip(maxEntries)) {
+      store.llmCache.remove(old.key);
+    }
+  }
+
+  @override
+  Future<int> deleteForGame(int gameId) async {
+    final before = store.llmCache.length;
+    store.llmCache.removeWhere((_, v) => v.gameId == gameId);
+    return before - store.llmCache.length;
+  }
+
+  @override
+  Future<int> count() async => store.llmCache.length;
 }
 
 class InMemorySettingsRepository implements SettingsRepository {

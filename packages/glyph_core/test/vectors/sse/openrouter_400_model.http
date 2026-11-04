@@ -1,0 +1,5 @@
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-glyph-synthetic: true
+
+{"error":{"message":"gpt-9 is not a valid model ID","code":400}}

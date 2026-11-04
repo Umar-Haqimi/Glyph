@@ -11,9 +11,13 @@ import 'package:glyph/data/models.dart';
 import 'package:glyph/data/providers.dart';
 import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/l10n/app_localizations_en.dart';
+import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph/platform/file_picker_service.dart';
+import 'package:glyph/platform/secret_store.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:glyph_core/testing.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 final l10n = AppLocalizationsEn();
 
@@ -32,6 +36,10 @@ class FakeFilePicker implements FilePickerService {
   }
 }
 
+/// An [LlmClient] whose connection always fails.
+LlmClient offlineLlmClient() =>
+    LlmClient(httpClient: () => MockClient((request) async => throw http.ClientException('offline in tests')));
+
 class TestEnv {
   TestEnv({
     Map<String, String>? settings,
@@ -39,6 +47,8 @@ class TestEnv {
     OpeningBook? book,
     EngineDriverFactory? driverFactory,
     InMemoryAnalysisRepository Function(InMemoryStore store)? analysesBuilder,
+    Map<String, String>? secrets,
+    LlmClient? llm,
     this.timeouts = const PipelineTimeouts(
       handshake: Duration(seconds: 2),
       stop: Duration(milliseconds: 100),
@@ -49,8 +59,11 @@ class TestEnv {
         settings = InMemorySettingsRepository(settings),
         picker = picker ?? FakeFilePicker(null),
         book = book ?? OpeningBook(const {}),
-        driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()) {
+        driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()),
+        secrets = InMemorySecretStore(secrets),
+        llm = llm ?? offlineLlmClient() {
     games = InMemoryGameRepository(store);
+    cache = InMemoryLlmCacheRepository(store);
     analyses = analysesBuilder?.call(store) ?? InMemoryAnalysisRepository(store);
   }
 
@@ -58,6 +71,12 @@ class TestEnv {
   late final InMemoryGameRepository games;
   late final InMemoryAnalysisRepository analyses;
   final InMemorySettingsRepository settings;
+  late final InMemoryLlmCacheRepository cache;
+  final InMemorySecretStore secrets;
+
+  /// The LLM client of the app under test. Default: every request fails as
+  /// if offline (no test touches a real network).
+  final LlmClient llm;
   final FilePickerService picker;
   final OpeningBook book;
 
@@ -71,6 +90,9 @@ class TestEnv {
         gameRepositoryProvider.overrideWithValue(games),
         analysisRepositoryProvider.overrideWithValue(analyses),
         settingsRepositoryProvider.overrideWithValue(settings),
+        llmCacheRepositoryProvider.overrideWithValue(cache),
+        secretStoreProvider.overrideWithValue(secrets),
+        llmClientProvider.overrideWithValue(llm),
         filePickerServiceProvider.overrideWithValue(picker),
         openingBookProvider.overrideWith((ref) => book),
         nowMsProvider.overrideWithValue(() => clock++),

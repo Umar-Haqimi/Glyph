@@ -25,6 +25,14 @@ abstract final class Limits {
   /// stream is stopped and the result is marked truncated.
   static const int maxLlmStreamBytes = 32 * 1024;
 
+  /// Maximum size of one server-sent event (and of an unfinished line) from an
+  /// LLM endpoint, in bytes: 256 KB. A stream that never ends a line is cut off.
+  static const int maxSseEventBytes = 256 * 1024;
+
+  /// Maximum size of an error body from an LLM endpoint that is read, in
+  /// bytes: 64 KB (the rest is dropped).
+  static const int maxLlmErrorBodyBytes = 64 * 1024;
+
   /// Timeout for establishing a connection.
   static const Duration connectTimeout = Duration(seconds: 15);
 

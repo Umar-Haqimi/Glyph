@@ -296,3 +296,29 @@ class MoveLabelRecord {
   final double? winAfter;
   final String? bestUci;
 }
+
+/// A saved LLM answer (`llm_cache`). [key] is `CacheKey.of`: it already
+/// includes everything that changes the text, so a hit is always valid.
+class CachedLlmText {
+  const CachedLlmText({
+    required this.key,
+    required this.kind,
+    required this.content,
+    required this.model,
+    required this.createdAt,
+    this.gameId,
+  });
+
+  final String key;
+
+  /// `move` or `summary` (the CHECK constraint of the table).
+  final PromptKind kind;
+  final String content;
+  final String model;
+
+  /// Unix epoch milliseconds.
+  final int createdAt;
+
+  /// The game it belongs to, so deleting or re-analysing the game removes it.
+  final int? gameId;
+}

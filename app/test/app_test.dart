@@ -27,7 +27,7 @@ void main() {
     expect(find.text(_l10n.importFromChessCom), findsOneWidget);
   });
 
-  testWidgets('library -> board; Explain placeholder sheet and Report are reachable', (tester) async {
+  testWidgets('library -> board; Explain sheet (set-up gate) and Report are reachable', (tester) async {
     final env = TestEnv();
     await env.seed(white: 'Alice', black: 'Bob');
     await env.pump(tester);
@@ -45,9 +45,10 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(ExplainSheet),
-        matching: find.text(_l10n.explainTitle),
+        matching: find.text(_l10n.explainSetupTitle),
       ),
       findsOneWidget,
+      reason: 'no model is configured, so the sheet asks to set one up',
     );
     await tester.tapAt(const Offset(10, 10)); // dismiss the sheet via the barrier
     await tester.pumpAndSettle();

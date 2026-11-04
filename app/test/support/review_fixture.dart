@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/data/models.dart';
 import 'package:glyph/features/board/board_screen.dart';
 import 'package:glyph/l10n/app_localizations.dart';
+import 'package:glyph/routes.dart';
 import 'package:glyph/theme/app_theme.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -142,6 +143,7 @@ Future<ProviderContainer> pumpReview(
       localizationsDelegates: [AppLocalizations.delegate, ...GlobalMaterialLocalizations.delegates],
       supportedLocales: AppLocalizations.supportedLocales,
       home: BoardScreen(gameId: id, initialPly: initialPly),
+      onGenerateRoute: Routes.onGenerateRoute,
     ),
   ));
   await settleBoard(tester);

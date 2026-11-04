@@ -36,7 +36,7 @@ NewGame newGame({
       importedAt: importedAt,
     );
 
-typedef Repos = ({GameRepository games, AnalysisRepository analyses, SettingsRepository settings});
+typedef Repos = ({GameRepository games, AnalysisRepository analyses, SettingsRepository settings, LlmCacheRepository cache});
 
 /// Behaviour every implementation of the repositories must have.
 void contract(String name, Repos Function() create) {
@@ -301,6 +301,54 @@ void contract(String name, Repos Function() create) {
       expect((await r.games.get(id))!.analysisStatus, isNull);
     });
 
+    CachedLlmText entry(String key, {int? gameId, int createdAt = 1, String content = 'text', PromptKind kind = PromptKind.move}) =>
+        CachedLlmText(key: key, kind: kind, content: content, model: 'gpt', createdAt: createdAt, gameId: gameId);
+
+    test('llm cache: get, replace on the same key (Regenerate), kinds', () async {
+      expect(await r.cache.get('k'), isNull);
+      await r.cache.put(entry('k', content: 'first'));
+      await r.cache.put(entry('s', kind: PromptKind.summary, content: 'sum'));
+      expect((await r.cache.get('k'))!.content, 'first');
+      expect((await r.cache.get('s'))!.kind, PromptKind.summary);
+      await r.cache.put(entry('k', content: 'second', createdAt: 9));
+      final k = (await r.cache.get('k'))!;
+      expect(k.content, 'second');
+      expect(k.createdAt, 9);
+      expect(k.model, 'gpt');
+      expect(await r.cache.count(), 2);
+    });
+
+    test('llm cache: trimmed to the newest entries', () async {
+      for (var i = 0; i < 8; i++) {
+        await r.cache.put(entry('k$i', createdAt: i), maxEntries: 5);
+      }
+      expect(await r.cache.count(), 5);
+      expect(await r.cache.get('k2'), isNull);
+      expect(await r.cache.get('k3'), isNotNull);
+      expect(await r.cache.get('k7'), isNotNull);
+    });
+
+    test('llm cache: deleting a game, or clearing its analysis, removes its entries only', () async {
+      final a = (await r.games.save(newGame(sourceId: 'a'))).id;
+      final b = (await r.games.save(newGame(sourceId: 'b'))).id;
+      await r.cache.put(entry('a1', gameId: a));
+      await r.cache.put(entry('a2', gameId: a));
+      await r.cache.put(entry('b1', gameId: b));
+      await r.cache.put(entry('orphan'));
+      expect(await r.cache.deleteForGame(a), 2);
+      expect(await r.cache.get('a1'), isNull);
+      expect(await r.cache.get('b1'), isNotNull);
+
+      await r.analyses.clear(b); // Re-analyse: the lines change, so does the text
+      expect(await r.cache.get('b1'), isNull);
+      expect(await r.cache.get('orphan'), isNotNull);
+
+      await r.cache.put(entry('b2', gameId: b));
+      await r.games.delete(b);
+      expect(await r.cache.get('b2'), isNull);
+      expect(await r.cache.get('orphan'), isNotNull);
+    });
+
     test('settings', () async {
       expect(await r.settings.get('k'), isNull);
       await r.settings.set('k', 'v1');
@@ -319,6 +367,7 @@ void main() {
       games: InMemoryGameRepository(store),
       analyses: InMemoryAnalysisRepository(store),
       settings: InMemorySettingsRepository(),
+      cache: InMemoryLlmCacheRepository(store),
     );
   });
 
@@ -329,15 +378,16 @@ void main() {
       games: SqliteGameRepository(db),
       analyses: SqliteAnalysisRepository(db),
       settings: SqliteSettingsRepository(db),
+      cache: SqliteLlmCacheRepository(db),
     );
   });
 
   group('Db', () {
-    test('creates the SPEC 5.4 schema at user_version 1', () {
+    test('creates the SPEC 5.4 schema (plus llm_cache.game_id from M6) at the latest user_version', () {
       final db = Db.inMemory();
       addTearDown(db.close);
-      expect(db.raw.userVersion, 1);
-      expect(Db.schemaVersion, 1);
+      expect(db.raw.userVersion, 2);
+      expect(Db.schemaVersion, 2);
       final tables = db.raw
           .select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
           .map((r) => r['name'])
@@ -355,7 +405,7 @@ void main() {
       ]);
       expect(cols('position_lines'), ['game_id', 'ply', 'rank', 'score_cp', 'score_mate', 'depth', 'pv_uci']);
       expect(cols('move_labels'), ['game_id', 'ply', 'label', 'ep_loss', 'win_before', 'win_after', 'best_uci']);
-      expect(cols('llm_cache'), ['key', 'kind', 'content', 'model', 'created_at']);
+      expect(cols('llm_cache'), ['key', 'kind', 'content', 'model', 'created_at', 'game_id']);
       expect(cols('settings'), ['key', 'value']);
     });
 
@@ -387,7 +437,7 @@ void main() {
       db.close();
       db = Db.open(path);
       addTearDown(db.close);
-      expect(db.raw.userVersion, 1);
+      expect(db.raw.userVersion, Db.schemaVersion);
       expect((await SqliteGameRepository(db).get(id))!.white, 'Alice');
     });
 
@@ -413,13 +463,28 @@ void main() {
       expect(() => Db.open(path, migrations: steps), throwsA(isA<SqliteException>()));
       final raw = sqlite3.open(path);
       addTearDown(raw.close);
-      expect(raw.userVersion, 1);
+      expect(raw.userVersion, Db.schemaVersion);
       expect(raw.select("SELECT name FROM sqlite_master WHERE name = 'extra'"), isEmpty);
-      // A later, fixed migration then applies from version 1.
+      // A later, fixed migration then applies from the stored version.
       final fixed = [...Db.migrations, (Database db) => db.execute('CREATE TABLE extra (x)')];
       final db = Db.open(path, migrations: fixed);
       addTearDown(db.close);
+      expect(db.raw.userVersion, Db.schemaVersion + 1);
+    });
+
+    test('upgrading a version 1 database (M5) keeps its cached explanations and adds llm_cache.game_id', () {
+      final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v1.db';
+      addTearDown(() => File(path).parent.deleteSync(recursive: true));
+      final v1 = Db.open(path, migrations: [Db.migrations.first]);
+      expect(v1.raw.userVersion, 1);
+      v1.raw.execute("INSERT INTO llm_cache (key, kind, content, model, created_at) VALUES ('k','move','text','m',5)");
+      v1.close();
+      final db = Db.open(path);
+      addTearDown(db.close);
       expect(db.raw.userVersion, 2);
+      final row = db.raw.select('SELECT * FROM llm_cache').single;
+      expect(row['content'], 'text');
+      expect(row['game_id'], isNull);
     });
 
     test('transaction rolls back on error', () {

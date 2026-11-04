@@ -27,6 +27,8 @@ dependencies:
   chessground:
     path: ../third_party/chessground
   dartchess: ^0.14.0
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,5 @@
+HTTP/1.1 400 Bad Request
+content-type: application/json; charset=utf-8
+x-glyph-synthetic: true
+
+{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.","type":"invalid_request_error","param":"max_tokens","code":"unsupported_parameter"}}

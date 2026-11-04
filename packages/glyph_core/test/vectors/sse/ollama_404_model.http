@@ -1,0 +1,5 @@
+HTTP/1.1 404 Not Found
+content-type: application/json; charset=utf-8
+x-glyph-synthetic: true
+
+{"error":{"message":"model \"llama9\" not found, try pulling it first","type":"api_error","param":null,"code":null}}

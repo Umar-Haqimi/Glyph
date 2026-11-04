@@ -17,6 +17,10 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
   (ref) => throw UnimplementedError('settingsRepositoryProvider must be overridden'),
 );
 
+final llmCacheRepositoryProvider = Provider<LlmCacheRepository>(
+  (ref) => throw UnimplementedError('llmCacheRepositoryProvider must be overridden'),
+);
+
 /// Milliseconds since the epoch. Overridable for tests.
 final nowMsProvider = Provider<int Function()>((ref) => () => DateTime.now().millisecondsSinceEpoch);
 

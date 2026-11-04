@@ -1,0 +1,5 @@
+HTTP/1.1 503 Service Unavailable
+content-type: text/html
+x-glyph-synthetic: true
+
+<html><head><title>503 Service Temporarily Unavailable</title></head><body><center><h1>503</h1></center></body></html>

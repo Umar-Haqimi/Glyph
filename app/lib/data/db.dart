@@ -22,7 +22,7 @@ class Db {
 
   /// Migration `i` upgrades `user_version` i to i + 1. Never edit a shipped
   /// migration; append a new one.
-  static final List<void Function(Database db)> migrations = [_v1];
+  static final List<void Function(Database db)> migrations = [_v1, _v2];
 
   void _init() {
     raw.execute('PRAGMA foreign_keys = ON');
@@ -118,4 +118,11 @@ CREATE TABLE llm_cache (
   content TEXT NOT NULL, model TEXT NOT NULL, created_at INTEGER NOT NULL
 )''');
   db.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+}
+
+/// M6: `llm_cache.game_id`, so a deleted or re-analysed game takes its cached
+/// explanations with it (the SPEC 5.4 table has no owner column).
+void _v2(Database db) {
+  db.execute('ALTER TABLE llm_cache ADD COLUMN game_id INTEGER');
+  db.execute('CREATE INDEX llm_cache_game ON llm_cache (game_id)');
 }

@@ -67,6 +67,13 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | D5 | Wrong key (401), wrong model (404) | Mapped error copy | | |
 | D6 | Airplane mode: analysis works | Works | | |
 | D7 | Airplane mode: Explain | Shows `offline` state | | |
+| D8 | Settings > Explanations > LLM connection: save a key, restart the app, Test connection | Key survives (masked `••••abcd`), test succeeds; "Remove key" empties it | | |
+| D9 | `adb logcat` during Explain, Test connection and a failing request | No key, prompt text or provider message in the log | | |
+| D10 | Explain on a move, then close the sheet while it streams | Request stops (provider shows the cancelled connection), no crash | | |
+| D11 | Rotate the phone while an explanation streams | Text and state survive, no second request | | |
+| D12 | TalkBack on the Explain sheet while streaming | Sentences are read as they complete, never repeated; the tail and "Explanation ready." are announced once | | |
+| D13 | Game summary: finish an analysis with a key set (auto on), then with auto off | Summary appears on the report by itself / "Summarize game" button; gone when the setting is off | | |
+| D14 | Model that rejects `max_tokens` (o-series) with that setting chosen | Copy names `max_tokens` and says which setting to change | | |
 
 ### E. Export and interop
 

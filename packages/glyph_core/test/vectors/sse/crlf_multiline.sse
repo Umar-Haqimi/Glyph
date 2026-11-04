@@ -1,0 +1,31 @@
+: SYNTHETIC vector: hand-built from the documented format, NOT a real capture (docs/m0/VECTORS.md section 4)
+retry: 3000
+
+id: 1
+event: message
+data: {
+data:  "id": "chatcmpl-SYNTHETIC0001",
+data:  "object": "chat.completion.chunk",
+data:  "created": 1767225600,
+data:  "model": "gpt-4o-mini-2024-07-18",
+data:  "service_tier": "default",
+data:  "system_fingerprint": "fp_SYNTHETIC",
+data:  "choices": [
+data:   {
+data:    "index": 0,
+data:    "delta": {
+data:     "content": "Nxe5 loses a knight — after ...Nxe5, you are "
+data:    },
+data:    "logprobs": null,
+data:    "finish_reason": null
+data:   }
+data:  ],
+data:  "usage": null
+data: }
+
+: keep-alive
+
+data: {"id":"chatcmpl-SYNTHETIC0001","object":"chat.completion.chunk","created":1767225600,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_SYNTHETIC","choices":[{"index":0,"delta":{"content":"three points down (日本語 café ♞).\nBetter was d3."},"logprobs":null,"finish_reason":null}],"usage":null}data:{"id":"chatcmpl-SYNTHETIC0001","object":"chat.completion.chunk","created":1767225600,"model":"gpt-4o-mini-2024-07-18","service_tier":"default","system_fingerprint":"fp_SYNTHETIC","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop"}],"usage":null}
+
+data: [DONE]
+

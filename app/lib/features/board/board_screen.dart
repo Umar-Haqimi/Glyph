@@ -412,7 +412,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                             expanded: _linesExpanded,
                             onToggle: () => setState(() => _linesExpanded = !_linesExpanded),
                           ),
-                          CoachCard(line: coach, showExplain: ply > 0),
+                          CoachCard(line: coach, showExplain: ply > 0, gameId: data.record.id, ply: ply),
                         ],
                       ),
                     ),

@@ -41,7 +41,12 @@ Determinism: use Threads=1; node counts are stable on the same binary/hash.
 `packages/glyph_core/test/vectors/classify/<label>.json`: arrays of `{name, transcript, startFen, moves, ply, expectedLabel, note}` (+ optional `book`, `variant`, `epLoss`, `sacrifice`). `moves` is SAN up to and including `ply`, a prefix of the transcript game. To add a case: add the game to `games.json`, record it, run the classifier on it (e.g. a temporary test printing `reviewGame(...).moves`), and add the case with a note explaining the numbers.
 
 ## 4. SSE captures (sse/)
-Use a throwaway key from env; redact with sed before saving. Never commit raw files.
+
+**Status (M6): the committed vectors are SYNTHETIC, not captures.** No API keys were available in M0-M6, so `packages/glyph_core/test/vectors/sse/` holds hand-built files that reproduce each provider's *documented* streaming format: OpenAI chat completion chunks (role chunk, `finish_reason`, `stream_options.include_usage` chunk with empty `choices`, `length`, an `{"error": ...}` event mid-stream), OpenRouter (`: OPENROUTER PROCESSING` comment lines, `provider` / `native_finish_reason`, usage chunk, the mid-stream error chunk with `finish_reason: "error"`), Ollama / LM Studio `/v1` (plain chunks, a thinking model's `reasoning` deltas), a CRLF / multi-line `data:` / lone-CR / `id` `event` `retry` stress file, and the HTTP error bodies of OpenAI (401, 404 model, 429 rate, 429 quota, 400 `unsupported_parameter`, 400 `unsupported_value`, 500, 503 HTML), OpenRouter (401, 402, 400 invalid model, 429) and Ollama (404 model, 404 wrong path). Every file carries a marker (`: SYNTHETIC vector ...` in streams, `x-glyph-synthetic: true` in the `.http` files), `manifest.json` has `"synthetic": true`, and a test fails if a vector lacks the marker. `packages/glyph_core/tool/gen_sse_fixtures.dart` regenerates them (`dart run tool/gen_sse_fixtures.dart`).
+
+`test/llm/sse_vectors_test.dart` feeds every stream whole, split at **every** byte boundary, 200 random multi-chunk splits, byte by byte, and through `LlmClient` in 7-byte chunks; it checks the decoded text, the finish reason and the error kind from `manifest.json`, and maps every `.http` file with `ErrorMapper`. Real captures replace the synthetic files one by one: save the capture under the same file name and keep the manifest entry (text / finish reason / error kind) in step with what the real answer says.
+
+**Capture commands (left for the user to run).** Use a throwaway key from the environment; redact with sed before saving. Never commit raw files.
 ```
 # OpenAI
 curl -N -sS https://api.openai.com/v1/chat/completions -H "Authorization: Bearer $OPENAI_API_KEY" -H 'Content-Type: application/json' \
@@ -52,7 +57,7 @@ curl -N -sS https://openrouter.ai/api/v1/chat/completions -H "Authorization: Bea
 # Ollama (no key)
 curl -N -sS http://localhost:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"llama3.2","stream":true,"messages":[...]}' > sse/ollama_ok.raw
 ```
-Error bodies: 401 (bad key), 404 (unknown model), 429, 400 `unsupported_parameter` (send `max_tokens` to an o-series model) -> `curl -sS -i ... > sse/<name>.raw` (keep status line + body). Redaction: `sed -E -i 's/(sk-[A-Za-z0-9_-]+|sk-or-[A-Za-z0-9_-]+)/REDACTED/g; s/(org|proj)-[A-Za-z0-9]+/\1-REDACTED/g; s/"(system_fingerprint|id)":"[^"]*"/"\1":"X"/g'` and `grep -ciE 'sk-|bearer'` must print 0. Status: no keys were available during M0, so these are NOT yet captured (blocked on user-supplied keys; Ollama needs a local model).
+With `stream_options` add `"stream_options":{"include_usage":true}` for the usage chunk. Error bodies: 401 (bad key), 404 (unknown model), 429, 400 `unsupported_parameter` (send `max_tokens` to an o-series model) -> `curl -sS -i ... > sse/<name>.http` (keep status line + headers + body; the test reads the status from the first line and the body after the blank line). Redaction: `sed -E -i 's/(sk-[A-Za-z0-9_-]+|sk-or-[A-Za-z0-9_-]+)/REDACTED/g; s/(org|proj)-[A-Za-z0-9]+/\1-REDACTED/g; s/"(system_fingerprint|id)":"[^"]*"/"\1":"X"/g'` and `grep -ciE 'sk-|bearer'` must print 0. Ollama needs a local model; the others need keys.
 
 ## 5. Other fixtures from M0
 - `docs/m0/lichess_sample.ndjson`, `docs/m0/chesscom_sample.json` (real, trimmed).

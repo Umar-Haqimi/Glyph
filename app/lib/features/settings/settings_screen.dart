@@ -4,8 +4,10 @@ import 'package:material_ui/material_ui.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
 import '../../theme/theme_providers.dart';
+import 'explanation_settings_section.dart';
 
-/// Settings. M1 only has the appearance section, to exercise Riverpod end to end.
+/// Settings: Explanations (M6) and Appearance. The engine, accounts and
+/// general sections come with M7 / M8.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -23,6 +25,8 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
         children: [
+          const ExplanationSettingsSection(),
+          const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
