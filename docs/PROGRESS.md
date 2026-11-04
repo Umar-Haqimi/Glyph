@@ -251,14 +251,29 @@ Release build (cloud container, Android SDK 36, `flutter build apk --release --s
 
 Deviations / notes (details in DECISIONS "M8 decisions"):
 - **Move sounds** use Android's system click, not a bundled sound (no asset to license); default off.
-- **Piece sets**: four (cburnett, merida, mpchess, rhosgfx), not "all free ones": the others add attribution text and APK size for little choice. The F19 board-colour picker lists the 24 colour schemes of the allow-list.
+- **Piece sets**: four (cburnett, merida, mpchess, rhosgfx), not "all free ones": the others add attribution text and APK size for little choice. The F19 board-colour picker lists the 23 colour schemes of the allow-list (24 before the M8 review removed `newspaper`).
 - **Source link** is displayed and copied, not opened: there is no `url_launcher` (and no web view by design).
 - **The library list record has an empty `pgn`** (`list()` is for cards); `get()` has the movetext. A consumer that needs the PGN must call `get`.
 - **`Bootstrap` replaces the old `main()`**: the database is opened after the first frame. Widget tests are unaffected (they override the repositories); `bootstrap` has its own tests.
 - A **WIP snapshot commit** (`11645c4 WIP M8 ...`) appeared on the branch while M8 was in progress, as in M4; it was not made by this work and the final state is in the working tree.
 - Not verified (no device): everything in HARDWARE_TEST sections G, H, I; TalkBack output; R8 behaviour of the plugins at run time (audited by reading their sources and rules, not by running); the move-sound click; real battery / temperature / timing of the engine settings; the licence texts of the chessground assets and the NNUE net (taken from M0's reading of lila's `COPYING.md`; re-check against upstream before v0.1.0).
 
+### M8 review fixes (host-verified; nothing run on a device)
+
+Details in DECISIONS "M8 review fixes". Each item has regression tests.
+1. **Keys vs. database reset.** A key without a binding is bound only to a hosted preset's fixed origin, never to the current URL; the start-up "Delete the database" now deletes the API keys (first; a failing key delete aborts the reset) and its confirmation lists exactly what is deleted; Delete all data keeps the binding row of any key the keystore would not delete.
+2. **Database failure causes.** Typed `DatabaseTooNewException`; "update Glyph" screen with Delete behind two confirmations; "free some space" + Try again for a full disk (real `SQLITE_FULL` in the test); version check before the WAL pragma; `deleteDatabaseFiles` deletes the main file last; real-file tests replace the tautological one.
+3. **Exported PGN** (`cache/shared_pgn`) is deleted at start, on game delete and by Delete all data; HARDWARE_TEST H12.
+4. **Logging.** `installErrorHooks()` (type-only in release); PRIVACY section 5 and HARDWARE_TEST H6 now match: nothing from Dart reaches release logcat.
+5. **Licences.** About intro made accurate; Leela Chess Zero / ODbL credit added; upstream licences verified 2026-11-04 (URLs in ASSETS.md); `newspaper` and `ncf-board` board images removed (23 board colours, 19 board images left).
+6. `Db.open` closes the handle on failure; `Bootstrap` closes the `Db` if the appearance read fails; Try again / reset are re-entrancy guarded.
+7. LLM `User-Agent: Glyph/<version>` set explicitly; PRIVACY lists `plyCount` and describes `result` / `ending` as the code does; `privacy_doc_test` covers the summary prompt.
+8. Thread ceiling (cores - 1) shared by picker, clamp and setter; hash ceiling 128 MB on 32-bit ABIs / under 3 GB RAM; move sounds subtitle names Android's touch-sounds setting.
+9. Signing: blank values count as missing, `storeFile` documented as relative to `android/`, `tool/check_signing.sh` (apksigner; fails on `CN=Android Debug` with `GLYPH_REQUIRE_SIGNING=1`).
+10. Tests: `startup_test` through `Bootstrap` with recording HTTP clients; in-memory `list()` returns no PGN; Clear saved explanations asks first.
+- Tests after the review fixes: core **673** (+3 skipped), app **649** (was 617).
+
 Notes for M9:
 - README must say: classification approximates chess.com's, privacy summary = `docs/PRIVACY.md`, build steps = `tool/build_release.sh` (`GLYPH_KEYSTORE_*`), interop table, threat model summary, credits = `docs/ASSETS.md`.
-- Before tagging: run HARDWARE_TEST A to J on the Honor phone, re-verify `docs/ASSETS.md` against upstream (lila `COPYING.md`, Stockfish's network notes), record the SF19 SSE captures (M6 note), re-record transcripts with SF19 (M4 note), and decide whether to exclude `libmultistockfish_chess.so` / `libmultistockfish_variant.so` (3.4 MB per ABI, untested option in DECISIONS M0 3.2).
+- Before tagging: run HARDWARE_TEST A to J on the Honor phone, re-check `docs/ASSETS.md` against upstream once more (it was verified on 2026-11-04 in the M8 review), record the SF19 SSE captures (M6 note), re-record transcripts with SF19 (M4 note), and decide whether to exclude `libmultistockfish_chess.so` / `libmultistockfish_variant.so` (3.4 MB per ABI, untested option in DECISIONS M0 3.2).
 - `CHANGELOG.md` and the `v0.1.0` tag are M9.

@@ -22,6 +22,8 @@ fi
 flutter build apk --release --split-per-abi --split-debug-info=build/symbols
 
 cd "$ROOT"
+# With GLYPH_REQUIRE_SIGNING=1 this fails if an APK carries the debug key's signature.
+bash tool/check_signing.sh
 bash tool/check_permissions.sh
 bash tool/check_banned_deps.sh
 echo "Release APKs:"

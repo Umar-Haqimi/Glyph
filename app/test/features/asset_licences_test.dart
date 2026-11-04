@@ -15,6 +15,7 @@ const _free = {
   'AGPL-3.0-or-later',
   'CC0-1.0',
   'Apache-2.0',
+  'ODbL-1.0', // attribution for the data the Stockfish network was trained on (nothing of it ships)
   'blessing', // SQLite's public-domain dedication
 };
 
@@ -92,8 +93,11 @@ void main() {
 
   test('board images on disk are the board-images entry, and none is the non-free one', () {
     final boards = _entries(Directory('../third_party/chessground/assets/boards'));
-    expect(boards, hasLength(21));
+    expect(boards, hasLength(19));
     expect(boards.any((b) => b.startsWith('horsey')), isFalse);
+    // Left out in M8: unreferenced (ncf-board) / licence not confirmed (newspaper).
+    expect(boards, isNot(contains('ncf-board.webp')));
+    expect(boards, isNot(contains('newspaper.webp')));
   });
 
   test('the launcher icon is Glyph\'s own vector drawing: no template PNGs remain', () {

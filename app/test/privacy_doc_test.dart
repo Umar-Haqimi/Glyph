@@ -106,4 +106,65 @@ void main() {
       expect(doc, contains(words[key]!), reason: key);
     }
   });
+
+  test('every top-level field of the game summary prompt is described, and the "ending" claim is true of the code', () {
+    final snapshot = File('../packages/glyph_core/test/vectors/prompts/summary_opera_coach.txt').readAsStringSync();
+    final json = snapshot.substring(snapshot.indexOf('=== user ===') + 12);
+    final keys = RegExp(r'^  "(\w+)":', multiLine: true).allMatches(json).map((m) => m.group(1)!).toSet();
+    expect(keys, containsAll(['result', 'userResult', 'ending', 'plyCount', 'opening', 'userSide', 'accuracy', 'labelCounts', 'keyMoments', 'whiteWinChanceEvery5Plies', 'audience', 'tone', 'language']));
+    const words = {
+      'result': 'the result as the game records it',
+      'userResult': 'whether you won',
+      'ending': 'how the game ended',
+      'plyCount': 'the number of plies',
+      'opening': 'the opening name',
+      'userSide': 'your side',
+      'accuracy': 'accuracy percentages',
+      'labelCounts': 'how many moves of each label',
+      'keyMoments': 'key moments',
+      'whiteWinChanceEvery5Plies': 'every 5 plies',
+      'audience': 'audience level, tone and language',
+      'tone': 'audience level, tone and language',
+      'language': 'audience level, tone and language',
+    };
+    for (final key in keys) {
+      expect(words, contains(key), reason: 'the summary prompt has a field "$key" that PRIVACY.md does not cover');
+      expect(doc, contains(words[key]!), reason: key);
+    }
+    // The document says the result is the PGN's marker and the ending is derived from the final position, never from a header.
+    final builder = File('../packages/glyph_core/lib/src/llm/prompt_builder.dart').readAsStringSync();
+    expect(builder, contains("'result': game.result,"));
+    expect(builder, contains("'ending': _ending(game, wins.last, positions.last)"));
+    expect(builder, isNot(contains('Termination')), reason: 'the Termination header (user names on chess.com) is never read');
+    expect(doc, contains('the PGN\'s result marker'));
+    expect(doc, contains('never from the `Termination` header'));
+    final resultValues = RegExp(r"'result': '([^']*)'").allMatches(json).map((m) => m.group(1)).toList();
+    expect(resultValues.every((r) => const {'1-0', '0-1', '1/2-1/2', '*'}.contains(r)), isTrue);
+  });
+
+  test('the LLM User-Agent in the document is the one the HTTP client sends, and the code comment agrees', () {
+    expect(doc, contains('`User-Agent: ${llmUserAgent.replaceFirst(appVersion, '<version>')}`'));
+    final comment = File('lib/platform/llm_http.dart').readAsStringSync();
+    expect(comment, isNot(contains('no user agent')));
+    expect(comment, contains('llmUserAgent'));
+  });
+
+  test('what it says about exported files, key records and logging matches the code', () {
+    expect(doc, contains('deleted at every app start, when you delete a game, and by *Delete all data*'));
+    expect(File('lib/platform/shared_exports.dart').existsSync(), isTrue);
+    expect(File('lib/bootstrap.dart').readAsStringSync(), contains('sharedExports.clear()'));
+    expect(File('lib/features/library/library_controller.dart').readAsStringSync(), contains('sharedExportsProvider'));
+    expect(File('lib/features/settings/data_management.dart').readAsStringSync(), contains('sharedExportsProvider'));
+    // Logging: the hooks the document names exist and are installed.
+    expect(doc, contains('FlutterError.onError'));
+    expect(doc, contains('PlatformDispatcher.instance.onError'));
+    expect(doc, contains('app/lib/platform/error_hooks.dart'));
+    expect(File('lib/platform/error_hooks.dart').existsSync(), isTrue);
+    expect(File('lib/main.dart').readAsStringSync(), contains('installErrorHooks()'));
+    expect(File('lib/platform/app_log.dart').readAsStringSync(), contains('developer.log'));
+    expect(doc, contains('in the release APK Glyph\'s Dart code writes nothing to logcat'));
+    // Keys: no auto-binding to the current URL, and the reset erases keys.
+    expect(doc, contains('never sent to "whatever the URL is now"'));
+    expect(doc, contains('start-up database reset'));
+  });
 }

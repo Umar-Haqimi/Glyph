@@ -98,10 +98,21 @@ void main() {
       expect(await vault.keyFor(LlmProvider.openai, 'https://api.openai.com/v1'), key);
     });
 
-    test('a key of Custom / Ollama binds to the current URL on first read, then stays there', () async {
-      await store.write('custom', key);
-      expect(await vault.keyFor(LlmProvider.custom, 'https://mine.example/v1'), key);
-      expect(await vault.keyFor(LlmProvider.custom, 'https://other.example/v1'), isNull);
+    test('a key of Custom / Ollama / LM Studio with no binding is never bound to the current URL: it is not sent anywhere', () async {
+      for (final provider in [LlmProvider.custom, LlmProvider.ollama, LlmProvider.lmstudio]) {
+        await store.write(provider.slot, key);
+        for (final url in ['https://mine.example/v1', 'https://other.example/v1', 'http://localhost:11434/v1']) {
+          expect(await vault.keyFor(provider, url), isNull, reason: '${provider.name} at $url');
+          final info = await vault.info(provider, url);
+          expect(info.availability, KeyAvailability.otherOrigin, reason: 'shown as "save the key again"');
+        }
+        expect(await settings.get('${SettingsKeys.llmKeyOriginPrefix}${provider.slot}'), isNull, reason: 'nothing was auto-bound');
+        // Saving it again binds it to the address the user is looking at.
+        expect(await vault.save(provider, 'https://mine.example/v1', key), isTrue);
+        expect(await vault.keyFor(provider, 'https://mine.example/v1'), key);
+        expect(await vault.keyFor(provider, 'https://other.example/v1'), isNull);
+        await vault.remove(provider);
+      }
     });
 
     test('with an unusable URL the key is not sent anywhere', () async {

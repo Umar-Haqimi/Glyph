@@ -43,7 +43,7 @@ class InMemoryGameRepository implements GameRepository {
     };
   }
 
-  GameRecord _record(int id, NewGame g) {
+  GameRecord _record(int id, NewGame g, {bool withPgn = true}) {
     final a = store.analyses[id];
     return GameRecord.from(
       id,
@@ -52,12 +52,16 @@ class InMemoryGameRepository implements GameRepository {
       completedPlies: a?.completedPlies ?? 0,
       whiteAccuracy: a?.whiteAccuracy,
       blackAccuracy: a?.blackAccuracy,
+      pgn: withPgn ? null : '',
     );
   }
 
+  /// Like the SQLite implementation, the list rows carry no movetext (`pgn`
+  /// is empty): a screen that needs the PGN must call [get]. A fake that
+  /// returned it would hide that mistake in tests.
   @override
   Future<List<GameRecord>> list() async {
-    final out = [for (final e in store.games.entries) _record(e.key, e.value)];
+    final out = [for (final e in store.games.entries) _record(e.key, e.value, withPgn: false)];
     out.sort((a, b) {
       final c = b.importedAt.compareTo(a.importedAt);
       return c != 0 ? c : b.id.compareTo(a.id);

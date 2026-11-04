@@ -10,6 +10,8 @@ plugins {
 // Release signing: read from android/key.properties (git-ignored) or from environment variables
 // (GLYPH_KEYSTORE_FILE, GLYPH_KEYSTORE_PASSWORD, GLYPH_KEY_ALIAS, GLYPH_KEY_PASSWORD). Nothing about the
 // keystore is committed (.gitignore covers key.properties, *.jks and *.keystore).
+// storeFile is resolved relative to the android/ directory (rootProject.file), so
+// `storeFile=../release.jks` is app/release.jks; an absolute path works too.
 // If neither is present the release build falls back to the debug key so CI and local builds always pass;
 // such an APK is for testing only. Set GLYPH_REQUIRE_SIGNING=1 (tool/build_release.sh does) to make a
 // release build without a keystore fail instead.
@@ -18,8 +20,11 @@ val keyProperties = Properties().apply {
     if (file.exists()) FileInputStream(file).use { load(it) }
 }
 
+// An empty or blank value counts as missing (an exported but empty variable, or `storePassword=` in
+// key.properties, must not look like a configured keystore).
 fun signingValue(propertyName: String, envName: String): String? =
-    keyProperties.getProperty(propertyName) ?: System.getenv(envName)
+    (keyProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() } ?: System.getenv(envName))
+        ?.takeIf { it.isNotBlank() }
 
 val releaseStoreFile = signingValue("storeFile", "GLYPH_KEYSTORE_FILE")
 val releaseStorePassword = signingValue("storePassword", "GLYPH_KEYSTORE_PASSWORD")

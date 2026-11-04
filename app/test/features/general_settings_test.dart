@@ -1,18 +1,24 @@
+import 'dart:io';
+
 import 'package:chessground/chessground.dart' show ChessboardColorScheme, StaticChessboard;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/app.dart';
 import 'package:glyph/data/models.dart';
+import 'package:glyph/data/providers.dart';
 import 'package:glyph/data/repositories.dart';
 import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/features/board/board_assets.dart';
 import 'package:glyph/features/board/board_preview.dart';
 import 'package:glyph/features/board/board_screen.dart';
+import 'package:glyph/features/library/library_controller.dart';
 import 'package:glyph/features/settings/appearance_settings.dart';
 import 'package:glyph/features/settings/appearance_settings_section.dart';
 import 'package:glyph/features/settings/data_management.dart';
 import 'package:glyph/features/settings/engine_settings.dart';
 import 'package:glyph/features/settings/engine_settings_section.dart';
+import 'package:glyph/features/settings/explain_settings.dart';
+import 'package:glyph/features/settings/key_vault.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -41,6 +47,56 @@ ProviderContainer containerOf(WidgetTester tester) => ProviderScope.containerOf(
 
 void main() {
   group('Settings > Engine (F19)', () {
+    test('setThreads and setHashMb never store more than the picker offers on this device', () async {
+      final repo = TestEnv().settings;
+      final c = ProviderContainer(overrides: [
+        settingsRepositoryProvider.overrideWithValue(repo),
+        coreCountProvider.overrideWithValue(4),
+        maxHashMbProvider.overrideWithValue(128),
+      ]);
+      addTearDown(c.dispose);
+      final n = c.read(engineSettingsProvider.notifier);
+      await n.setThreads(99);
+      expect(await repo.get(SettingsKeys.engineThreads), '3', reason: 'cores - 1, the largest thread option');
+      await n.setThreads(0);
+      expect(await repo.get(SettingsKeys.engineThreads), '1');
+      await n.setHashMb(4096);
+      expect(await repo.get(SettingsKeys.engineHashMb), '128');
+      final s = await c.read(engineSettingsProvider.future);
+      expect((s.threads, s.hashMb), (1, 128));
+      // Picker and clamp agree: every offered option survives a reload unchanged.
+      for (final t in EngineDefaults.threadOptions(4)) {
+        await n.setThreads(t);
+        expect((await EngineSettings.load(repo, cores: 4, maxHashMb: 128)).threads, t);
+      }
+      expect(EngineDefaults.threadOptions(4).last, EngineDefaults.maxThreads(4));
+    });
+
+    test('the hash ceiling: 128 MB on a 32-bit ABI or below 3 GB of RAM (or unknown), else 256 MB', () {
+      const gb = 1024 * 1024;
+      expect(DeviceProfile.maxHashMb(is32Bit: false, totalMemKb: 8 * gb), 256);
+      expect(DeviceProfile.maxHashMb(is32Bit: false, totalMemKb: 3 * gb), 256);
+      expect(DeviceProfile.maxHashMb(is32Bit: false, totalMemKb: 3 * gb - 1), 128);
+      expect(DeviceProfile.maxHashMb(is32Bit: true, totalMemKb: 8 * gb), 128);
+      expect(DeviceProfile.maxHashMb(is32Bit: false, totalMemKb: null), 128);
+      expect(EngineDefaults.hashOptionsFor(128), [16, 32, 64, 128]);
+      expect(EngineDefaults.hashOptionsFor(256), EngineDefaults.hashOptionsMb);
+      expect(DeviceProfile.parseMemTotalKb('MemTotal:        3921236 kB\nMemFree: 1 kB\n'), 3921236);
+      expect(DeviceProfile.parseMemTotalKb('nothing'), isNull);
+      expect(DeviceProfile.is32BitAbi('3.12.0 (stable) (Mon) on "android_arm"'), isTrue);
+      expect(DeviceProfile.is32BitAbi('3.12.0 (stable) (Mon) on "android_arm64"'), isFalse);
+      expect(DeviceProfile.is32BitAbi('3.12.0 (stable) (Mon) on "android_x64"'), isFalse);
+    });
+
+    testWidgets('on a device limited to 128 MB the hash picker does not offer 256 MB', (tester) async {
+      final env = TestEnv(maxHashMb: 128);
+      await env.pump(tester);
+      await openSettings(tester);
+      await tapTile(tester, 'settings-engine-hash');
+      expect(find.byKey(const Key('engine-hash-128')), findsOneWidget);
+      expect(find.byKey(const Key('engine-hash-256')), findsNothing);
+    });
+
     testWidgets('shows the defaults and stores a changed preset, thread count and hash size', (tester) async {
       final env = TestEnv();
       await env.pump(tester);
@@ -96,7 +152,9 @@ void main() {
     test('a stored thread count or hash size from a bigger device is clamped on this one', () async {
       final repo = TestEnv(settings: {SettingsKeys.engineThreads: '32', SettingsKeys.engineHashMb: '4096'}).settings;
       final s = await EngineSettings.load(repo, cores: 4);
-      expect((s.threads, s.hashMb), (4, 256));
+      expect((s.threads, s.hashMb), (3, 256), reason: 'the picker offers 1 to cores - 1, and the stored value is clamped to the same');
+      final small = await EngineSettings.load(repo, cores: 4, maxHashMb: 128);
+      expect(small.hashMb, 128);
     });
 
     testWidgets('a new analysis uses the chosen depth, threads and hash', (tester) async {
@@ -267,18 +325,30 @@ void main() {
       return env;
     }
 
-    testWidgets('Clear saved explanations empties the cache only, and says how many went', (tester) async {
+    testWidgets('Clear saved explanations asks first; Cancel keeps them, Clear empties the cache only and says how many went', (tester) async {
       final env = await seeded(tester);
       await env.pump(tester);
       await openSettings(tester);
       await tapTile(tester, 'settings-clear-explanations');
+      expect(find.text(l10n.settingsClearExplanationsTitle), findsOneWidget);
+      expect(find.text(l10n.settingsClearExplanationsBody), findsOneWidget);
+      await tester.tap(find.byKey(const Key('clear-explanations-cancel')));
+      await tester.pumpAndSettle();
+      expect(await env.cache.count(), 2, reason: 'Cancel changes nothing');
+      expect(find.text(l10n.settingsClearExplanationsDone(2)), findsNothing);
+
+      await tapTile(tester, 'settings-clear-explanations');
+      await tester.tap(find.byKey(const Key('clear-explanations-confirm')));
+      await tester.pumpAndSettle();
       expect(find.text(l10n.settingsClearExplanationsDone(2)), findsOneWidget);
       expect(await env.cache.count(), 0);
       expect((await env.games.list()), hasLength(2));
       expect(await env.onlineCache.get('https://api.chess.com/x'), isNotNull);
       // Nothing left: the message says so.
       await tapTile(tester, 'settings-clear-explanations');
+      await tester.tap(find.byKey(const Key('clear-explanations-confirm')));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text(l10n.settingsClearExplanationsDone(0)), findsOneWidget);
     });
 
@@ -315,6 +385,7 @@ void main() {
       await tester.tap(find.byKey(const Key('delete-all-confirm')));
       await tester.pumpAndSettle();
       expect(find.text(l10n.settingsDeleteAllDone), findsOneWidget);
+      expect(env.exports.clears, 1, reason: 'the exported PGN in the cache goes too');
       expect(await env.games.list(), isEmpty);
       expect(env.store.analyses, isEmpty);
       expect(env.store.lines, isEmpty);
@@ -365,6 +436,52 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(l10n.settingsDeleteAllDone), findsOneWidget);
       expect(await env.secrets.read('openai'), isNull);
+    });
+
+    testWidgets('a key the keystore refuses to delete keeps its binding: it is never sendable to a new address (M8 review)', (tester) async {
+      const bound = 'https://mine.example:443';
+      final env = TestEnv(
+        settings: {
+          SettingsKeys.llmProvider: 'custom',
+          SettingsKeys.llmBaseUrl: 'https://mine.example/v1',
+          '${SettingsKeys.llmKeyOriginPrefix}custom': bound,
+        },
+        secrets: {'custom': 'sk-secret-1234'},
+      );
+      env.secrets.failDeletes = true;
+      await env.pump(tester);
+      final container = containerOf(tester);
+      await expectLater(container.read(dataManagementProvider).deleteAll(), throwsA(isA<DataManagementException>()));
+      expect(await env.settings.get(SettingsKeys.llmBaseUrl), isNull, reason: 'the rest of the settings are cleared');
+      expect(await env.settings.get('${SettingsKeys.llmKeyOriginPrefix}custom'), bound, reason: 'the surviving key stays bound to where it was saved');
+      final vault = KeyVault(env.secrets, env.settings);
+      expect(await vault.keyFor(LlmProvider.custom, 'https://elsewhere.example/v1'), isNull);
+      expect(await vault.keyFor(LlmProvider.custom, 'https://mine.example/v1'), 'sk-secret-1234', reason: 'unchanged from before the failed action');
+      // The retry deletes the key and the binding.
+      env.secrets.failDeletes = false;
+      await container.read(dataManagementProvider).deleteAll();
+      expect(env.secrets.slots, isEmpty);
+      expect(await env.settings.get('${SettingsKeys.llmKeyOriginPrefix}custom'), isNull);
+    });
+
+    testWidgets('a failure to empty the export folder is reported, and the other steps still ran', (tester) async {
+      final env = await seeded(tester);
+      env.exports.error = const FileSystemException('denied');
+      await env.pump(tester);
+      final container = containerOf(tester);
+      await expectLater(container.read(dataManagementProvider).deleteAll(), throwsA(isA<DataManagementException>().having((e) => e.failedSteps, 'steps', ['exported files'])));
+      expect(await env.games.list(), isEmpty);
+      expect(env.secrets.slots, isEmpty);
+    });
+
+    testWidgets('deleting one game empties the export folder too', (tester) async {
+      final env = await seeded(tester);
+      await env.pump(tester);
+      final container = containerOf(tester);
+      final id = (await env.games.list()).first.id;
+      await container.read(libraryProvider.notifier).deleteNow(id);
+      expect(env.exports.clears, 1);
+      expect(await env.games.list(), hasLength(1));
     });
   });
 

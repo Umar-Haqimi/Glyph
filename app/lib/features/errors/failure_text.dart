@@ -32,6 +32,8 @@ String apiKeyProblemText(AppLocalizations l10n, ApiKeyProblem problem) => switch
 
 String appFailureText(AppLocalizations l10n, AppFailure failure) => switch (failure) {
       AppFailure.databaseOpen => l10n.startupDbBody,
+      AppFailure.databaseNewer => l10n.startupDbNewerBody,
+      AppFailure.databaseFull => l10n.startupDbFullBody,
       AppFailure.importSave => l10n.importSaveFailed,
       AppFailure.exportShare => l10n.exportFailed,
       AppFailure.dataManagement => l10n.settingsDataFailed,

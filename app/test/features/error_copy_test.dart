@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glyph/bootstrap.dart';
 import 'package:glyph/data/db.dart';
@@ -12,9 +15,11 @@ import 'package:glyph/features/import/share_intake.dart';
 import 'package:glyph/features/library/library_screen.dart';
 import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph/platform/app_log.dart';
+import 'package:glyph/platform/secret_store.dart';
 import 'package:glyph/routes.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 import '../support/fake_online.dart';
 import '../support/review_fixture.dart';
@@ -125,6 +130,8 @@ void main() {
         l10n.settingsDataFailed,
         l10n.startupDbTitle,
         l10n.startupDbBody,
+        l10n.startupDbNewerBody,
+        l10n.startupDbFullBody,
         l10n.startupDbResetFailed,
         l10n.importFileOpenFailed,
         l10n.libraryLoadFailed,
@@ -296,6 +303,26 @@ void main() {
   });
 
   group('startup: the database cannot be opened', () {
+    late InMemorySecretStore keys;
+    late FakeSharedExports exports;
+    setUp(() {
+      keys = InMemorySecretStore({'openai': 'sk-1', 'custom': 'sk-2'});
+      exports = FakeSharedExports();
+    });
+
+    Bootstrap bootstrap({
+      Future<String> Function()? databasePath,
+      required Future<Db> Function(String path) open,
+      Future<void> Function(String path)? deleteFiles,
+    }) =>
+        Bootstrap(
+          databasePath: databasePath ?? () async => '/data/glyph.db',
+          open: open,
+          deleteFiles: deleteFiles ?? (_) async {},
+          secretStore: keys,
+          sharedExports: exports,
+        );
+
     Future<void> pumpBootstrap(WidgetTester tester, Bootstrap bootstrap) async {
       tester.view.physicalSize = const Size(360, 740);
       tester.view.devicePixelRatio = 1;
@@ -304,15 +331,24 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// A file database written by "a newer Glyph" (user_version above this build's).
+    String newerDbFile() {
+      final dir = Directory.systemTemp.createTempSync('glyph_newer');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/glyph.db';
+      final raw = sqlite3.open(path);
+      raw.execute('CREATE TABLE games (x)');
+      raw.userVersion = Db.schemaVersion + 1;
+      raw.close();
+      return path;
+    }
+
     testWidgets('shows the recovery screen with copy, Try again and Delete the database', (tester) async {
       final lines = <String>[];
       final old = AppLog.sink;
       AppLog.sink = lines.add;
       addTearDown(() => AppLog.sink = old);
-      await pumpBootstrap(
-        tester,
-        Bootstrap(databasePath: () async => '/nowhere/glyph.db', open: (_) async => throw StateError('Database is newer (v9) than this app (v5).'), deleteFiles: (_) async {}),
-      );
+      await pumpBootstrap(tester, bootstrap(databasePath: () async => '/nowhere/glyph.db', open: (_) async => throw StateError('malformed disk image: /secret/path')));
       expect(find.text(l10n.startupDbTitle), findsOneWidget);
       expect(find.text(l10n.startupDbBody), findsOneWidget);
       expect(find.byKey(const Key('startup-retry')), findsOneWidget);
@@ -320,18 +356,86 @@ void main() {
       expect(lines.single, 'Opening the database failed (StateError)', reason: 'the type only, never the message');
     });
 
+    testWidgets('a database from a newer Glyph (a real file with a higher user_version): "update Glyph", Try again, Delete only behind two confirmations', (tester) async {
+      final path = newerDbFile();
+      var deletes = 0;
+      await pumpBootstrap(tester, bootstrap(databasePath: () async => path, open: openAppDb, deleteFiles: (_) async => deletes++));
+      expect(find.text(l10n.startupDbNewerBody), findsOneWidget);
+      expect(l10n.startupDbNewerBody, contains('Update Glyph'));
+      expect(find.text(l10n.startupDbBody), findsNothing);
+      expect(find.byKey(const Key('startup-retry')), findsOneWidget);
+      // Delete is not the primary action: a text button with its own label, not the filled / outlined one.
+      expect(find.widgetWithText(FilledButton, l10n.startupDbRetry), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, l10n.startupDbReset), findsNothing);
+      expect(find.widgetWithText(TextButton, l10n.startupDbResetNewer), findsOneWidget);
+      expect(find.text(l10n.startupDbReset), findsNothing);
+
+      // First confirmation: Cancel stops everything.
+      await tester.tap(find.byKey(const Key('startup-reset')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.startupDbNewerConfirmTitle), findsOneWidget);
+      await tester.tap(find.byKey(const Key('startup-newer-cancel')));
+      await tester.pumpAndSettle();
+      expect(deletes, 0);
+      // Second confirmation: Continue leads to the normal one, Cancel there stops too.
+      await tester.tap(find.byKey(const Key('startup-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('startup-newer-continue')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.startupDbResetConfirmTitle), findsOneWidget);
+      await tester.tap(find.byKey(const Key('startup-reset-cancel')));
+      await tester.pumpAndSettle();
+      expect(deletes, 0);
+      expect(keys.slots, unorderedEquals(['openai', 'custom']), reason: 'nothing was deleted');
+      expect(File(path).existsSync(), isTrue);
+    });
+
+    testWidgets('a database from a newer Glyph is left untouched by the failed open (the file and its user_version)', (tester) async {
+      final path = newerDbFile();
+      final before = File(path).readAsBytesSync();
+      await pumpBootstrap(tester, bootstrap(databasePath: () async => path, open: openAppDb));
+      final raw = sqlite3.open(path);
+      addTearDown(raw.close);
+      expect(raw.userVersion, Db.schemaVersion + 1);
+      expect(File(path).readAsBytesSync(), before);
+    });
+
+    testWidgets('a full disk (a real SQLITE_FULL): "free some space" and Try again; Delete is not offered', (tester) async {
+      var broken = true;
+      await pumpBootstrap(
+        tester,
+        bootstrap(open: (_) async {
+          if (broken) throw _realSqliteFull();
+          return Db.inMemory();
+        }),
+      );
+      expect(find.text(l10n.startupDbFullBody), findsOneWidget);
+      expect(l10n.startupDbFullBody, contains('Free some space'));
+      expect(find.byKey(const Key('startup-retry')), findsOneWidget);
+      expect(find.byKey(const Key('startup-reset')), findsNothing);
+      broken = false;
+      await tester.tap(find.byKey(const Key('startup-retry')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.libraryEmptyTitle), findsOneWidget);
+    });
+
+    test('classifyDbOpenFailure: newer, full (SQLite and ENOSPC), everything else', () {
+      expect(classifyDbOpenFailure(const DatabaseTooNewException(found: 9, supported: 5)), DbOpenProblem.newerVersion);
+      expect(classifyDbOpenFailure(_realSqliteFull()), DbOpenProblem.diskFull);
+      expect(classifyDbOpenFailure(const FileSystemException('write failed', '/x', OSError('No space left on device', 28))), DbOpenProblem.diskFull);
+      expect(classifyDbOpenFailure(const FileSystemException('denied', '/x', OSError('Permission denied', 13))), DbOpenProblem.other);
+      expect(classifyDbOpenFailure(StateError('Database is newer')), DbOpenProblem.other, reason: 'only the typed exception counts, not a message');
+      expect(classifyDbOpenFailure(SqliteException(extendedResultCode: 11, message: 'malformed')), DbOpenProblem.other);
+    });
+
     testWidgets('Try again opens the app once the database works', (tester) async {
       var broken = true;
       await pumpBootstrap(
         tester,
-        Bootstrap(
-          databasePath: () async => ':memory:',
-          open: (_) async {
-            if (broken) throw StateError('locked');
-            return Db.inMemory();
-          },
-          deleteFiles: (_) async {},
-        ),
+        bootstrap(open: (_) async {
+          if (broken) throw StateError('locked');
+          return Db.inMemory();
+        }),
       );
       expect(find.text(l10n.startupDbTitle), findsOneWidget);
       broken = false;
@@ -341,12 +445,42 @@ void main() {
       expect(find.text(l10n.libraryEmptyTitle), findsOneWidget);
     });
 
-    testWidgets('Delete the database asks first, then deletes the files and opens a fresh one', (tester) async {
+    testWidgets('Try again twice in a row opens the database once (no concurrent opens)', (tester) async {
+      var opens = 0;
+      final gate = Completer<Db>();
+      await pumpBootstrap(
+        tester,
+        bootstrap(open: (_) {
+          opens++;
+          return opens == 1 ? Future<Db>.error(StateError('locked')) : gate.future;
+        }),
+      );
+      expect(opens, 1);
+      final retry = tester.widget<FilledButton>(find.byKey(const Key('startup-retry'))).onPressed!;
+      retry();
+      retry();
+      await tester.pump();
+      expect(opens, 2, reason: 'the second tap is ignored while the first open runs');
+      gate.complete(Db.inMemory());
+      await tester.pumpAndSettle();
+      expect(opens, 2);
+      expect(find.text(l10n.libraryEmptyTitle), findsOneWidget);
+    });
+
+    testWidgets('the connection is closed when the settings read fails after a successful open', (tester) async {
+      final db = Db.inMemory();
+      db.raw.execute('DROP TABLE settings');
+      await pumpBootstrap(tester, bootstrap(open: (_) async => db));
+      expect(find.text(l10n.startupDbTitle), findsOneWidget);
+      expect(() => db.raw.select('SELECT 1'), throwsA(anything), reason: 'a leaked handle would stay open (and later delete the new database\'s WAL)');
+    });
+
+    testWidgets('Delete the database asks first, then erases the API keys, the files and the exported PGN, and opens a fresh one', (tester) async {
       var broken = true;
       final deleted = <String>[];
       await pumpBootstrap(
         tester,
-        Bootstrap(
+        bootstrap(
           databasePath: () async => '/data/glyph.db',
           open: (_) async {
             if (broken) throw StateError('corrupt');
@@ -358,24 +492,54 @@ void main() {
           },
         ),
       );
+      expect(exports.clears, 1, reason: 'exported files are removed at every start');
       await tester.tap(find.byKey(const Key('startup-reset')));
       await tester.pumpAndSettle();
       expect(find.text(l10n.startupDbResetConfirmTitle), findsOneWidget);
+      expect(find.text(l10n.startupDbResetConfirmBody), findsOneWidget);
       await tester.tap(find.byKey(const Key('startup-reset-cancel')));
       await tester.pumpAndSettle();
       expect(deleted, isEmpty);
+      expect(keys.slots, isNotEmpty);
       await tester.tap(find.byKey(const Key('startup-reset')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('startup-reset-confirm')));
       await tester.pumpAndSettle();
       expect(deleted, ['/data/glyph.db']);
+      expect(keys.slots, isEmpty, reason: 'the key bindings live in the database: a key must not survive without its binding');
+      expect(exports.clears, 2);
       expect(find.text(l10n.libraryEmptyTitle), findsOneWidget);
+    });
+
+    test('the confirmation lists what is deleted, and no longer says the keys are kept', () {
+      final body = l10n.startupDbResetConfirmBody;
+      for (final word in ['games', 'analyses', 'saved explanations', 'settings', 'LLM configuration', 'API keys', 'accounts', 'appearance']) {
+        expect(body, contains(word));
+      }
+      expect(body, isNot(contains('kept')));
+      for (final word in ['games', 'analyses', 'saved explanations', 'settings', 'LLM configuration', 'API keys', 'accounts', 'appearance']) {
+        expect(l10n.settingsDeleteAllBody, contains(word), reason: 'Delete all data says the same');
+      }
+    });
+
+    testWidgets('a key that cannot be deleted stops the reset before any file is deleted, and says so', (tester) async {
+      keys.failDeletes = true;
+      final deleted = <String>[];
+      await pumpBootstrap(tester, bootstrap(open: (_) async => throw StateError('corrupt'), deleteFiles: (p) async => deleted.add(p)));
+      await tester.tap(find.byKey(const Key('startup-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('startup-reset-confirm')));
+      await tester.pumpAndSettle();
+      expect(deleted, isEmpty, reason: 'database and bindings stay together');
+      expect(find.byKey(const Key('startup-reset-failed')), findsOneWidget);
+      expect(find.byKey(const Key('startup-retry')), findsOneWidget);
+      expect(find.byKey(const Key('startup-reset')), findsOneWidget);
     });
 
     testWidgets('a delete that fails says so and keeps both buttons', (tester) async {
       await pumpBootstrap(
         tester,
-        Bootstrap(databasePath: () async => '/data/glyph.db', open: (_) async => throw StateError('corrupt'), deleteFiles: (_) async => throw const FormatException('read-only')),
+        bootstrap(open: (_) async => throw StateError('corrupt'), deleteFiles: (_) async => throw const FormatException('read-only')),
       );
       await tester.tap(find.byKey(const Key('startup-reset')));
       await tester.pumpAndSettle();
@@ -386,14 +550,79 @@ void main() {
       expect(find.byKey(const Key('startup-retry')), findsOneWidget);
     });
 
-    testWidgets('the real opener rejects a database from a newer version and the app starts on an older, valid file', (tester) async {
-      final dbFiles = <String>[];
-      expect(dbFiles, isEmpty);
-      final db = await openAppDb(':memory:');
-      expect(db.raw.userVersion, Db.schemaVersion);
-      db.close();
+    test('deleteDatabaseFiles removes the database, -wal, -shm and -journal, leaves other files, and tolerates missing ones', () async {
+      final dir = Directory.systemTemp.createTempSync('glyph_delete');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/glyph.db';
+      for (final suffix in ['', '-wal', '-shm', '-journal']) {
+        File('$path$suffix').writeAsStringSync('x$suffix');
+      }
+      File('${dir.path}/other.db').writeAsStringSync('keep');
+      await deleteDatabaseFiles(path);
+      expect(dir.listSync().map((e) => e.path.split('/').last), ['other.db']);
+      await deleteDatabaseFiles(path); // nothing left: no error
+      // Only some exist.
+      File('$path-wal').writeAsStringSync('w');
+      await deleteDatabaseFiles(path);
+      expect(File('$path-wal').existsSync(), isFalse);
+    });
+
+    test('a real database in WAL mode is fully removed, and a fresh one opened at the same path holds none of its rows', () async {
+      final dir = Directory.systemTemp.createTempSync('glyph_wal');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/glyph.db';
+      final old = await openAppDb(path);
+      old.raw.execute('PRAGMA wal_autocheckpoint = 0');
+      old.raw.execute("INSERT INTO settings VALUES ('k', 'old')");
+      expect(File('$path-wal').existsSync(), isTrue, reason: 'the row lives in the WAL');
+      old.close();
+      await deleteDatabaseFiles(path);
+      expect(dir.listSync(), isEmpty);
+      final fresh = await openAppDb(path);
+      addTearDown(fresh.close);
+      expect(fresh.raw.select("SELECT * FROM settings WHERE key = 'k'"), isEmpty);
+    });
+
+    test('a failed open of a newer database closes its native handle: no WAL / SHM is left behind by a leaked connection', () {
+      final dir = Directory.systemTemp.createTempSync('glyph_leak');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/glyph.db';
+      final w = sqlite3.open(path);
+      w.execute('PRAGMA journal_mode = WAL');
+      w.execute('CREATE TABLE t (x)');
+      w.userVersion = 99;
+      w.close();
+      expect(() => Db.open(path), throwsA(isA<DatabaseTooNewException>()));
+      // A closed WAL database leaves only the main file; a leaked connection keeps -wal and -shm.
+      expect(dir.listSync().map((e) => e.path.split('/').last).toList(), ['glyph.db']);
+    });
+
+    test('a migration that fails also closes the handle', () {
+      final dir = Directory.systemTemp.createTempSync('glyph_leak2');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/glyph.db';
+      expect(
+        () => Db.open(path, migrations: [(db) => db.execute('CREATE TABLE a (x)'), (db) => throw StateError('boom')]),
+        throwsStateError,
+      );
+      expect(dir.listSync().map((e) => e.path.split('/').last).toList(), ['glyph.db']);
     });
   });
+}
+
+/// A real SQLITE_FULL: a database capped at two pages cannot take a bigger row.
+SqliteException _realSqliteFull() {
+  final raw = sqlite3.openInMemory();
+  try {
+    raw.execute('CREATE TABLE t (x BLOB)');
+    raw.execute('PRAGMA max_page_count = 2');
+    raw.execute("INSERT INTO t VALUES (randomblob(100000))");
+  } on SqliteException catch (e) {
+    return e;
+  } finally {
+    raw.close();
+  }
+  throw StateError('the insert should have failed with SQLITE_FULL');
 }
 
 /// A game repository whose reads can be made to fail, and whose `save` too.

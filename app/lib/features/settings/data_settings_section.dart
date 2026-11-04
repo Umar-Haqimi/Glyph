@@ -66,12 +66,38 @@ class DataSettingsSection extends ConsumerWidget {
 
   Future<void> _clearExplanations(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.settingsClearExplanationsTitle),
+        content: Text(l10n.settingsClearExplanationsBody),
+        actions: [
+          TextButton(
+            key: const Key('clear-explanations-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            key: const Key('clear-explanations-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.settingsClearExplanationsConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _runClearExplanations(context, ref);
+  }
+
+  /// Also the retry after a failure (the user already confirmed).
+  Future<void> _runClearExplanations(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
     try {
       final n = await ref.read(dataManagementProvider).clearExplanations();
       if (context.mounted) _say(context, l10n.settingsClearExplanationsDone(n));
     } on Object catch (e) {
       AppLog.warning('Clearing the saved explanations failed', e);
-      if (context.mounted) _failed(context, () => _clearExplanations(context, ref));
+      if (context.mounted) _failed(context, () => _runClearExplanations(context, ref));
     }
   }
 

@@ -4,8 +4,8 @@ import 'package:chessground/chessground.dart' show ChessboardColorScheme, PieceA
 /// schemes.
 ///
 /// `third_party/chessground` is a trimmed copy (see its NOTICE and
-/// `tool/vendor_chessground.sh`): only the `cburnett` piece set and the
-/// allow-listed board images exist. The package's `PieceSet` enum and the
+/// `tool/vendor_chessground.sh`): only the allow-listed piece sets (`cburnett`,
+/// `merida`, `mpchess`, `rhosgfx`) and board images exist. The package's `PieceSet` enum and the
 /// `ChessboardColorScheme` constants still list everything upstream ships, so
 /// `PieceSet.merida` or `ChessboardColorScheme.horsey` compile and then fail
 /// with a missing asset at run time. `test/hygiene_test.dart` fails if any
@@ -48,7 +48,8 @@ ChessboardColorScheme boardSchemeFor(String? key) => selectableBoardSchemes[key]
 const ChessboardColorScheme defaultBoardColorScheme = ChessboardColorScheme.brown;
 
 /// Every colour scheme whose assets are vendored (all upstream schemes but
-/// `horsey`, whose images are not licensed for redistribution). A test checks
+/// `horsey`, whose images are not licensed for redistribution, and `newspaper`,
+/// whose licence could not be confirmed, see `docs/ASSETS.md`). A test checks
 /// that each image they name exists in `third_party/chessground`.
 const Map<String, ChessboardColorScheme> selectableBoardSchemes = {
   'brown': ChessboardColorScheme.brown,
@@ -66,7 +67,6 @@ const Map<String, ChessboardColorScheme> selectableBoardSchemes = {
   'maple2': ChessboardColorScheme.maple2,
   'marble': ChessboardColorScheme.marble,
   'metal': ChessboardColorScheme.metal,
-  'newspaper': ChessboardColorScheme.newspaper,
   'olive': ChessboardColorScheme.olive,
   'pinkPyramid': ChessboardColorScheme.pinkPyramid,
   'purple': ChessboardColorScheme.purple,

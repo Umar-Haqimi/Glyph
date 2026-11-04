@@ -9,3 +9,10 @@ const String projectUrl = 'https://github.com/Umar-Haqimi/Glyph';
 /// chess.com asks for a recognisable one): the app name, its version and the
 /// repository, nothing about the user and no e-mail address.
 const String onlineUserAgent = 'Glyph/$appVersion (+$projectUrl)';
+
+/// The `User-Agent` of every request to the user's LLM server: the app name and
+/// version only. Set explicitly because `dart:io` would otherwise send
+/// `Dart/<sdk version> (dart:io)`, which says nothing useful and is not what
+/// `docs/PRIVACY.md` describes. No repository URL here: this goes to a server
+/// the user chose, which has no need of it.
+const String llmUserAgent = 'Glyph/$appVersion';

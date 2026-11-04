@@ -6,6 +6,8 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../engine/engine_providers.dart';
 import '../../engine/engine_service.dart';
+import '../../platform/app_log.dart';
+import '../../platform/shared_exports.dart';
 import '../explain/summary_controller.dart';
 
 /// The library list. A swipe-to-delete hides the game at once and only deletes
@@ -89,6 +91,13 @@ class LibraryController extends AsyncNotifier<List<GameRecord>> {
     await _engine.cancel(id);
     await ref.read(gameRepositoryProvider).delete(id);
     ref.invalidate(summaryProvider(id));
+    // The exported PGN in the cache (at most one file, whichever game it was
+    // for) must not outlive the game. Best effort: the delete is done.
+    try {
+      await ref.read(sharedExportsProvider).clear();
+    } on Object catch (e) {
+      AppLog.warning('Removing the exported file failed', e);
+    }
     _all = [
       for (final g in _all)
         if (g.id != id) g,

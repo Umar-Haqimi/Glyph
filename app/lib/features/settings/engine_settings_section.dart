@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -17,17 +15,15 @@ String presetLabel(AppLocalizations l10n, DepthPreset preset) => switch (preset)
 /// Settings > Engine (SPEC F19): analysis depth preset, threads, hash. The
 /// defaults are chosen per device (`EngineDefaults`, docs/DECISIONS.md M8).
 class EngineSettingsSection extends ConsumerWidget {
-  const EngineSettingsSection({super.key, this.cores});
-
-  /// Logical cores of this device (tests pass a fixed value).
-  final int? cores;
+  const EngineSettingsSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final settings = ref.watch(engineSettingsProvider).value;
     final notifier = ref.read(engineSettingsProvider.notifier);
-    final coreCount = cores ?? Platform.numberOfProcessors;
+    final coreCount = ref.watch(coreCountProvider);
+    final hashOptions = EngineDefaults.hashOptionsFor(ref.watch(maxHashMbProvider));
     final defaultThreads = EngineDefaults.threadsFor(coreCount);
     final threadOptions = EngineDefaults.threadOptions(coreCount);
 
@@ -91,7 +87,7 @@ class EngineSettingsSection extends ConsumerWidget {
                     context,
                     title: l10n.settingsEngineHash,
                     options: [
-                      for (final mb in {...EngineDefaults.hashOptionsMb, settings.hashMb}.toList()..sort()) (mb, hashText(mb)),
+                      for (final mb in {...hashOptions, settings.hashMb}.toList()..sort()) (mb, hashText(mb)),
                     ],
                     selected: settings.hashMb,
                     keyPrefix: 'engine-hash',

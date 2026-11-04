@@ -13,13 +13,16 @@ SRC="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/chessground-$VERSION"
 DST="$ROOT/third_party/chessground"
 
 # --- Allow-list: the only assets that are kept -------------------------------------
+# Left out on purpose (M8 review): ncf-board.webp (no colour scheme uses it, so it would ship
+# unreferenced and unlisted) and newspaper.webp (no matching file or licence row in lila's
+# public/images/board or COPYING.md, so its licence cannot be confirmed; see docs/ASSETS.md).
 # Every set here has a row in docs/ASSETS.md and in app/lib/features/about/asset_licences.dart;
 # app/test/features/asset_licences_test.dart fails when the three disagree.
 KEEP_PIECE_SETS=(cburnett merida mpchess rhosgfx)
 KEEP_BOARDS=(
   blue-marble.jpg blue2.jpg blue3.jpg canvas2.jpg green-plastic.webp grey.jpg
-  leather.jpg maple.jpg maple2.jpg marble.jpg metal.jpg ncf-board.webp
-  newspaper.webp olive.jpg pink-pyramid.webp purple-diag.webp purple.webp
+  leather.jpg maple.jpg maple2.jpg marble.jpg metal.jpg
+  olive.jpg pink-pyramid.webp purple-diag.webp purple.webp
   wood.jpg wood2.jpg wood3.jpg wood4.jpg
 )
 # ------------------------------------------------------------------------------------
@@ -86,7 +89,8 @@ Changes against the upstream $VERSION release:
 2. Assets REMOVED (not licensed for redistribution with Glyph, or not needed):
    - every piece set except $KEEP_LIST (assets/piece_sets/<name>/ for all other names);
    - every board image that is not in the allow-list of tool/vendor_chessground.sh,
-     in particular the \`horsey\` board images (assets/boards/horsey*).
+     in particular the \`horsey\` board images (assets/boards/horsey*), \`ncf-board.webp\`
+     (unused) and \`newspaper.webp\` (licence not confirmed).
    The assets that are kept: assets/piece_sets/{$KEEP_CSV}/ and the board images of the
    allow-list in tool/vendor_chessground.sh (assets/boards/).
 3. The Dart sources under lib/ are UNCHANGED. Consequently the enum \`PieceSet\` and

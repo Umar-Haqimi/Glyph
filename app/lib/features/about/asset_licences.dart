@@ -47,8 +47,11 @@ const String _chessground = 'third_party/chessground/assets';
 
 /// Every asset Glyph ships that is not a Dart or Kotlin source file or a pub
 /// package (pub packages bring their own `LICENSE`, which Flutter's licence
-/// page lists). All are free software licences that allow redistribution under
-/// the GPL-3.0-or-later; a build that adds anything else must fail the test.
+/// page lists). Each is a free licence that allows redistribution together with
+/// the GPL-3.0-or-later Glyph (GPL, AGPL, CC0, public domain, Apache-2.0; the
+/// ODbL entry is an attribution notice for the data the engine's network was
+/// trained on, not a shipped file); a build that adds anything else must fail
+/// the test.
 const List<AssetLicence> assetLicences = [
   AssetLicence(
     id: 'piece-cburnett',
@@ -97,7 +100,7 @@ const List<AssetLicence> assetLicences = [
     spdx: 'AGPL-3.0-or-later',
     licence: 'GNU AGPL, version 3 or later (combinable with the GPL-3.0, section 13)',
     author: 'the lichess.org authors and Pirouetti',
-    source: 'chessground 11.0.0, assets/boards (lichess.org, lila COPYING.md); the one board set with a non-commercial licence is left out',
+    source: 'chessground 11.0.0, assets/boards (lichess.org); lila COPYING.md: public/images/board is AGPLv3+. The non-commercial board set and one board whose licence is not confirmed are left out (docs/ASSETS.md)',
     paths: ['$_chessground/boards/'],
     note: 'The solid colour boards (brown, blue, green, IC) are drawn in code and need no file.',
   ),
@@ -131,7 +134,21 @@ const List<AssetLicence> assetLicences = [
     licence: 'GNU GPL, version 3 or later, with the engine',
     author: 'The Stockfish project (network file), repackaged by the multistockfish authors',
     source: 'multistockfish_light 0.1.0, compiled into libmultistockfish_light.so',
-    note: 'Distributed by multistockfish_light inside the Stockfish source tree under that package\'s GPL-3.0 licence.',
+    note: 'Distributed by multistockfish_light inside the Stockfish source tree under that package\'s GPL-3.0 licence. '
+        'Trained on Leela Chess Zero data, see the next entry.',
+  ),
+  AssetLicence(
+    id: 'nnue-training-data',
+    name: 'Leela Chess Zero training data (the Stockfish network is trained on it)',
+    kind: AssetKind.data,
+    spdx: 'ODbL-1.0',
+    licence: 'Open Database License 1.0 (ODbL)',
+    author: 'The Leela Chess Zero project',
+    source: 'https://storage.lczero.org/files/training_data; licence text https://opendatacommons.org/licenses/odbl/odbl-10.txt; '
+        'stated in the Acknowledgements of the Stockfish README shipped in multistockfish_light 0.1.0',
+    note: 'Credit required by the ODbL for works produced from the data: "Stockfish uses neural networks trained on data '
+        'provided by the Leela Chess Zero project, which is made available under the Open Database License (ODbL)." '
+        'The data itself is not shipped; only the trained network is.',
   ),
   AssetLicence(
     id: 'sqlite',

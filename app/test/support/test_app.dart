@@ -12,12 +12,14 @@ import 'package:glyph/data/models.dart';
 import 'package:glyph/data/providers.dart';
 import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/l10n/app_localizations_en.dart';
+import 'package:glyph/features/settings/engine_settings.dart';
 import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph/platform/file_picker_service.dart';
 import 'package:glyph/platform/online_http.dart';
 import 'package:glyph/platform/pgn_share_service.dart';
 import 'package:glyph/platform/share_intake.dart';
 import 'package:glyph/platform/secret_store.dart';
+import 'package:glyph/platform/shared_exports.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:glyph_core/testing.dart';
 import 'package:http/http.dart' as http;
@@ -66,6 +68,18 @@ class FakePgnShare implements PgnShareService {
   }
 }
 
+/// The exported-PGN folder: counts how often it was emptied (and can fail).
+class FakeSharedExports implements SharedExports {
+  int clears = 0;
+  Object? error;
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    if (error != null) throw error!;
+  }
+}
+
 /// A game source that is always offline.
 class OfflineOnlineClient implements OnlineGamesClient {
   @override
@@ -93,6 +107,8 @@ class TestEnv {
     OnlineGamesClient? chessCom,
     FakeShareIntake? intake,
     FakePgnShare? pgnShare,
+    FakeSharedExports? exports,
+    this.maxHashMb = EngineDefaults.maxHashMb,
     this.timeouts = const PipelineTimeouts(
       handshake: Duration(seconds: 2),
       stop: Duration(milliseconds: 100),
@@ -109,7 +125,8 @@ class TestEnv {
         lichess = lichess ?? OfflineOnlineClient(),
         chessCom = chessCom ?? OfflineOnlineClient(),
         intake = intake ?? FakeShareIntake(),
-        pgnShare = pgnShare ?? FakePgnShare() {
+        pgnShare = pgnShare ?? FakePgnShare(),
+        exports = exports ?? FakeSharedExports() {
     games = gamesBuilder?.call(store) ?? InMemoryGameRepository(store);
     cache = InMemoryLlmCacheRepository(store);
     analyses = analysesBuilder?.call(store) ?? InMemoryAnalysisRepository(store);
@@ -137,6 +154,12 @@ class TestEnv {
   final FakeShareIntake intake;
   final FakePgnShare pgnShare;
 
+  /// The exported-PGN folder of the app under test.
+  final FakeSharedExports exports;
+
+  /// The hash ceiling of the device under test (the picker offers up to it).
+  final int maxHashMb;
+
   /// The chess.com ETag cache of the app under test.
   final onlineCache = InMemoryOnlineCache();
 
@@ -161,6 +184,8 @@ class TestEnv {
         chessComClientProvider.overrideWithValue(chessCom),
         shareIntakeServiceProvider.overrideWithValue(intake),
         pgnShareServiceProvider.overrideWithValue(pgnShare),
+        sharedExportsProvider.overrideWithValue(exports),
+        maxHashMbProvider.overrideWithValue(maxHashMb),
         onlineCacheProvider.overrideWithValue(onlineCache),
         openingBookProvider.overrideWith((ref) {
           bookReads++;

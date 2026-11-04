@@ -145,5 +145,8 @@ Future<int> _importPasted(WidgetTester tester, TestEnv env, String text) async {
   await tester.tap(find.byKey(const Key('importSave')));
   await tester.pumpAndSettle();
   final games = await env.games.list();
-  return games.firstWhere((g) => g.source == GameSource.paste && g.white == 'Alice_99' && g.pgn.contains('Nf3')).id;
+  for (final g in games) {
+    if (g.source == GameSource.paste && g.white == 'Alice_99' && (await env.games.get(g.id))!.pgn.contains('Nf3')) return g.id;
+  }
+  throw StateError('the pasted game was not saved');
 }

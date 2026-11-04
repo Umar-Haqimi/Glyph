@@ -604,7 +604,7 @@ void main() {
       final path = '${dir.path}/glyph.db';
       final raw = sqlite3.open(path)..userVersion = 99;
       raw.close();
-      expect(() => Db.open(path), throwsStateError);
+      expect(() => Db.open(path), throwsA(isA<DatabaseTooNewException>().having((e) => (e.found, e.supported), 'versions', (99, Db.schemaVersion))));
     });
 
     test('a failing migration rolls back and keeps the old version', () {

@@ -104,6 +104,13 @@ enum AppFailure {
   /// The games database could not be opened at start (startup screen).
   databaseOpen,
 
+  /// The database was written by a newer Glyph (startup screen): updating
+  /// Glyph is the fix, deleting is a last resort behind an extra confirmation.
+  databaseNewer,
+
+  /// The disk is full (startup screen): free space, then Try again.
+  databaseFull,
+
   /// Saving an imported game failed (snackbar).
   importSave,
 
@@ -125,10 +132,12 @@ enum AppFailure {
 
 Recovery appFailureRecovery(AppFailure failure) => switch (failure) {
       AppFailure.databaseOpen ||
+      AppFailure.databaseFull ||
       AppFailure.importSave ||
       AppFailure.exportShare ||
       AppFailure.dataManagement ||
       AppFailure.libraryLoad ||
       AppFailure.boardLoad => Recovery.retry,
-      AppFailure.boardMissing => Recovery.dismiss,
+      // Nothing to retry until Glyph is updated.
+      AppFailure.databaseNewer || AppFailure.boardMissing => Recovery.dismiss,
     };

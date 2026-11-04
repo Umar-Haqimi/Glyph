@@ -32,11 +32,14 @@ abstract final class KeyBinding {
     return r.ok ? BaseUrlPolicy.origin(r.uri!) : null;
   }
 
-  /// The origin a key saved before bindings existed is bound to: a hosted
-  /// preset's own origin (whatever its URL field was edited to), otherwise the
-  /// origin of the current URL.
+  /// The origin a key with **no stored binding** may be bound to: only a
+  /// hosted preset's own fixed origin (OpenAI, OpenRouter). For a provider
+  /// whose address the user chooses (Ollama, LM Studio, Custom) there is none:
+  /// binding to "whatever the URL is now" would let a key that lost its binding
+  /// (a reset, a hand-edited database) be sent to a new host. Such a key is
+  /// treated as unbound: it is not sent until it is saved again.
   static String? legacyOrigin(LlmProvider provider, String baseUrl) =>
-      originOf(provider.hosted ? provider.defaultBaseUrl : baseUrl);
+      provider.hosted ? originOf(provider.defaultBaseUrl) : null;
 
   static bool isCleartext(String origin) => origin.startsWith('http://');
 
@@ -106,7 +109,8 @@ class KeyVault {
   Future<String?> _boundOrigin(LlmProvider provider, String baseUrl) async {
     final stored = await _settings.get(_originSetting(provider));
     if (stored != null && stored.isNotEmpty) return stored;
-    // A key saved before keys were bound: bind it now (first read).
+    // No binding stored. Only a hosted preset's fixed origin is ever assumed;
+    // anything else stays unbound (null: never sent, see [KeyBinding.legacyOrigin]).
     final origin = KeyBinding.legacyOrigin(provider, baseUrl);
     if (origin != null) await _settings.set(_originSetting(provider), origin);
     return origin;

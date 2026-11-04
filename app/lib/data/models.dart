@@ -121,12 +121,13 @@ class GameRecord extends NewGame {
     int completedPlies = 0,
     double? whiteAccuracy,
     double? blackAccuracy,
+    String? pgn,
   }) =>
       GameRecord(
         id: id,
         source: g.source,
         sourceId: g.sourceId,
-        pgn: g.pgn,
+        pgn: pgn ?? g.pgn,
         white: g.white,
         black: g.black,
         whiteElo: g.whiteElo,

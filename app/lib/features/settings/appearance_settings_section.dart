@@ -26,7 +26,6 @@ String boardSchemeName(AppLocalizations l10n, String key) => switch (key) {
       'maple2' => l10n.boardScheme_maple2,
       'marble' => l10n.boardScheme_marble,
       'metal' => l10n.boardScheme_metal,
-      'newspaper' => l10n.boardScheme_newspaper,
       'olive' => l10n.boardScheme_olive,
       'pinkPyramid' => l10n.boardScheme_pinkPyramid,
       'purple' => l10n.boardScheme_purple,

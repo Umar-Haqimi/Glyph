@@ -5,7 +5,15 @@ Glyph is **GPL-3.0-or-later** (`LICENSE`). An open-source (F-Droid style) build 
 How this was audited (M8, 2026-11-04):
 
 1. `find` over `app/assets`, `third_party/chessground/assets`, `app/android/app/src/main/res` and the APK contents (`unzip -l`) for files that are not code.
-2. Licences of the chessground assets were taken from the lila `COPYING.md` table as read in M0 (`DECISIONS.md` section 2.5, `lila/COPYING.md:20-99`); the pub package ships no per-asset licence file. **That table has not been re-checked against upstream in M8 (no network access to lila here); re-check it before tagging v0.1.0 (task for M9).**
+2. Licences of the chessground assets, **verified against upstream on 2026-11-04** (M8 review; fetched read-only with curl from `raw.githubusercontent.com`):
+   - <https://raw.githubusercontent.com/lichess-org/lila/master/COPYING.md> (SHA-256 of the file as fetched `ad0355db9ccd9ec049120945b356ff40c7c868d719a961732868bd5f5306cbba`), table "Exceptions (free)": `public/piece/cburnett` GPLv2+ (Colin M. L. Burnett); `public/piece/merida` GPLv2+ (Armando Hernandez Marroquin); `public/piece/mpchess` GPL v3+ (Maxime Chupin; the table's "GPL3v3+" is a typo for GPLv3+); `public/piece/rhosgfx` CC0 1.0 (RhosGFX); `public/images/board` AGPLv3+ (the lila authors and pirouetti). The same four piece directories exist upstream (`public/piece/<set>/wK.svg` returned HTTP 200).
+   - The chessground board files exist upstream under `public/images/board/` for every kept board, as `.jpg` or `.png` (chessground ships the PNGs as `.webp`): blue-marble, blue2, blue3, canvas2, green-plastic, grey, leather, maple, maple2, marble, metal, olive, pink-pyramid, purple-diag, purple, wood, wood2, wood3, wood4 (HTTP 200 each).
+   - **Not found upstream:** `newspaper` (neither `.webp`, `.png`, `.jpg` nor `.svg` in `public/images/board/`, and no row in COPYING.md). Its licence cannot be confirmed, so the file was **removed** (and the colour scheme is no longer selectable).
+   - **Unreferenced:** `ncf-board.webp` (128 bytes; no colour scheme of chessground 11.0.0 uses it, and COPYING.md has no row for it) was shipped unlisted; **removed** through the allow-list.
+   - The vendored package itself: <https://raw.githubusercontent.com/lichess-org/flutter-chessground/main/LICENSE> is the GNU GPL version 3 (the repository README makes no per-asset licence statement, so the lila table above is the authority for the artwork).
+   - The `openings` data: <https://raw.githubusercontent.com/lichess-org/chess-openings/master/README.md> states "As a collection of facts, this data set is in the public domain" and applies the CC0 Public Domain Dedication.
+   - Stockfish: <https://raw.githubusercontent.com/official-stockfish/Stockfish/master/Copying.txt> is the GNU GPL version 3.
+   - The network's training data: the Stockfish `README.md` shipped in `multistockfish_light` 0.1.0 (`ios/multistockfish_light/Sources/multistockfish_light/StockfishLight/README.md`, "Acknowledgements", lines 125-126) says Stockfish "uses neural networks trained on data provided by the Leela Chess Zero project, which is made available under the Open Database License (ODbL)". See `nnue-training-data` below.
 3. Everything not on the free list was removed: see "Removed".
 
 ## Shipped
@@ -38,7 +46,7 @@ How this was audited (M8, 2026-11-04):
 ### `board-images` Board textures (wood, marble, metal, ...)
 - Licence: GNU AGPL, version 3 or later (SPDX `AGPL-3.0-or-later`); an AGPL-3.0 work can be combined with a GPL-3.0 one (GPL-3.0 section 13 and AGPL-3.0 section 13)
 - Author: the lichess.org authors and Pirouetti (`lila/COPYING.md:38`)
-- Source: chessground 11.0.0, `assets/boards` (lichess.org); 21 images (wood, marble, metal, leather, ...)
+- Source: chessground 11.0.0, `assets/boards` (lichess.org); 19 images (wood, marble, metal, leather, ...); upstream: lila `COPYING.md`, row `public/images/board` (verified 2026-11-04, see Audit step 2)
 - Files: `third_party/chessground/assets/boards/`
 - The solid colour boards (brown, blue, green, IC) are drawn in code and need no file.
 
@@ -58,7 +66,13 @@ How this was audited (M8, 2026-11-04):
 - Licence: GNU GPL, version 3 or later, with the engine (SPDX `GPL-3.0-or-later`)
 - Author: The Stockfish project (network file), repackaged by the multistockfish authors
 - Source: `multistockfish_light` 0.1.0, compiled into `libmultistockfish_light.so`; the file sits in the Stockfish source tree of that package under its GPL-3.0 `LICENSE`.
-- **Uncertain:** the network's own provenance statement (training data) was not found in the package; the licence stated above is the one of the package that distributes it. Verify against the Stockfish project's network licence notes before v0.1.0.
+- Provenance (verified 2026-11-04): the Stockfish README in the package states the network is trained on Leela Chess Zero data under the ODbL; credited in the next entry, in the About screen and on Flutter's licence page.
+
+### `nnue-training-data` Leela Chess Zero training data (the Stockfish network is trained on it)
+- Licence: Open Database License 1.0 (SPDX `ODbL-1.0`)
+- Author: The Leela Chess Zero project
+- Source: <https://storage.lczero.org/files/training_data>; licence text <https://opendatacommons.org/licenses/odbl/odbl-10.txt>; statement in the Acknowledgements of the Stockfish README shipped in `multistockfish_light` 0.1.0.
+- The data itself is **not shipped**. The ODbL asks that works produced from the data carry a notice that the data was used and under which licence; this entry (About screen and licence page) is that notice. The trained network (`nnue` above) is a Produced Work and stays under the engine's GPL-3.0.
 
 ### `sqlite` SQLite (libsqlite3.so)
 - Licence: public domain (SPDX `blessing`)
@@ -94,8 +108,9 @@ chessground 11.0.0 declares about 40 piece sets and 24 board images as package a
 | Non-commercial (CC BY-NC-SA) | horsey, california, caliente, maestro, fresca, cardinal, icpieces, gioco, tatiana, staunty, dubrovny, anarcandy, disguised, cooke, monarchy, xkcd | not free software licences |
 | Non-free / no-derivatives / freeware | alpha, chess7, companion, leipzig, reillycraig, riohacha, shahi-ivory-brown | lila marks them non-free; shahi-ivory-brown carries a no-modification licence |
 | Licence not verified | kosal, governor, symmetric, totoy | absent from or ambiguous in lila `COPYING.md` |
+| Board images, not shipped | `newspaper.webp` (licence not found upstream), `ncf-board.webp` (used by no colour scheme, no licence row) | removed in the M8 review |
 | Free, but not needed | chessnut (Apache-2.0), letter, pirouetti, pixel, fantasy, spatial, celtic, shapes, kiwen-suwi, firi | left out to keep the APK small and the attribution list short; can be added by extending the allow-list, this document and `asset_licences.dart` |
-| Board images | `horsey` board (`horsey.jpg`, `horsey.last-move.webp`, `horsey.selected.webp`) | belongs to the NC horsey set |
+| Board images (non-free) | `horsey` board (`horsey.jpg`, `horsey.last-move.webp`, `horsey.selected.webp`) | belongs to the NC horsey set |
 
 The Dart code of chessground is unchanged, so the package's `PieceSet` enum still names the removed sets. App code reaches piece sets and board colours only through `app/lib/features/board/board_assets.dart` (allow-list maps); a hygiene test fails if any other file names them, and a test checks that every image the allow-lists name exists on disk and that every removed set is really gone.
 

@@ -189,6 +189,58 @@ void main() {
       expect(RegExp(r'(^|/)key\.properties$|\.jks$|\.keystore$', multiLine: true).hasMatch(tracked), isFalse, reason: 'a keystore or key.properties is tracked');
     });
 
+    test('an empty signing value counts as missing, and storeFile is documented as relative to android/', () {
+      expect(gradle, contains('takeIf { it.isNotBlank() }'));
+      expect(RegExp(r'getProperty\(propertyName\)\?\.takeIf \{ it\.isNotBlank\(\) \}').hasMatch(gradle), isTrue, reason: 'key.properties values');
+      expect(RegExp(r'System\.getenv\(envName\)\)\s*\?\.takeIf \{ it\.isNotBlank\(\) \}').hasMatch(gradle), isTrue, reason: 'environment values');
+      expect(gradle, contains('relative to the android/ directory'));
+    });
+
+    group('tool/check_signing.sh (apksigner)', () {
+      late Directory dir;
+      setUp(() => dir = Directory.systemTemp.createTempSync('signing'));
+      tearDown(() => dir.deleteSync(recursive: true));
+
+      /// A stand-in `apksigner` that prints [dn] as the signer (or fails).
+      String fakeApksigner(String dn, {int exit = 0}) {
+        final f = File('${dir.path}/apksigner')
+          ..writeAsStringSync('#!/usr/bin/env bash\necho "Signer #1 certificate DN: $dn"\nexit $exit\n');
+        Process.runSync('chmod', ['+x', f.path]);
+        return f.path;
+      }
+
+      ProcessResult run(String signer, {required bool require}) {
+        File('${dir.path}/app-x-release.apk').writeAsStringSync('apk');
+        return Process.runSync(
+          'bash',
+          ['../tool/check_signing.sh', '${dir.path}/app-x-release.apk'],
+          environment: {'APKSIGNER': signer, 'GLYPH_REQUIRE_SIGNING': require ? '1' : '0'},
+        );
+      }
+
+      test('a debug-signed APK fails when signing is required, and only warns otherwise', () {
+        final signer = fakeApksigner('C=US, O=Android, CN=Android Debug');
+        final strict = run(signer, require: true);
+        expect(strict.exitCode, isNot(0));
+        expect(strict.stderr, contains('debug key'));
+        final lax = run(signer, require: false);
+        expect(lax.exitCode, 0);
+        expect(lax.stderr, contains('WARN'));
+      });
+
+      test('an APK signed with another key passes; an APK apksigner rejects fails', () {
+        expect(run(fakeApksigner('CN=Glyph release, O=Umar'), require: true).exitCode, 0);
+        expect(run(fakeApksigner('CN=Glyph release', exit: 1), require: true).exitCode, isNot(0));
+      });
+
+      test('the release script runs it, after the build and before the permission check', () {
+        final script = File('../tool/build_release.sh').readAsStringSync();
+        expect(script, contains('tool/check_signing.sh'));
+        expect(script.indexOf('check_signing.sh'), lessThan(script.indexOf('check_permissions.sh')));
+        expect(script.indexOf('flutter build apk'), lessThan(script.indexOf('check_signing.sh')));
+      });
+    });
+
     test('GLYPH_REQUIRE_SIGNING=1 makes a release build without a keystore fail, and the release script sets it', () {
       expect(gradle, contains('GLYPH_REQUIRE_SIGNING'));
       expect(gradle, contains('throw GradleException'));

@@ -55,7 +55,8 @@ void main() {
       expect(saved.date, '2023.07.01');
       expect(saved.startFen, isNull);
       expect(saved.eco, 'A01');
-      expect(saved.pgn, contains('1. b3'));
+      expect(saved.pgn, isEmpty, reason: 'list rows carry no movetext, like the SQLite ones');
+      expect((await env.games.get(saved.id))!.pgn, contains('1. b3'));
 
       // Back to the library: the new card is listed.
       tester.state<NavigatorState>(find.byType(Navigator)).pop();

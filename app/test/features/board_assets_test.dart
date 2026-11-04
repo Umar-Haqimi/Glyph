@@ -33,7 +33,7 @@ void main() {
 
   test('every selectable board colour scheme only names images that are vendored', () {
     expect(selectableBoardSchemes.values, contains(defaultBoardColorScheme));
-    expect(selectableBoardSchemes, hasLength(24));
+    expect(selectableBoardSchemes, hasLength(23));
     var images = 0;
     for (final MapEntry(key: name, value: scheme) in selectableBoardSchemes.entries) {
       final used = <AssetImage>[
@@ -48,6 +48,22 @@ void main() {
       }
     }
     expect(images, greaterThan(40), reason: 'the image-backed schemes were really inspected');
+  });
+
+  test('every board image on disk is used by a selectable scheme (nothing ships unreferenced), and newspaper is out', () {
+    final referenced = <String>{};
+    for (final scheme in selectableBoardSchemes.values) {
+      for (final b in [scheme.background, scheme.whiteCoordBackground, scheme.blackCoordBackground]) {
+        if (b is ImageChessboardBackground) referenced.add(b.image.assetName.split('/').last);
+      }
+      for (final image in [scheme.lastMove.image, scheme.selected.image]) {
+        if (image != null) referenced.add(image.assetName.split('/').last);
+      }
+    }
+    final onDisk = Directory('../third_party/chessground/assets/boards').listSync().map((e) => e.path.split('/').last).toSet();
+    expect(onDisk, referenced);
+    expect(selectableBoardSchemes.values, isNot(contains(ChessboardColorScheme.newspaper)));
+    expect(onDisk, isNot(contains('ncf-board.webp')));
   });
 
   test('the removed ones really are removed: horsey is not selectable and its images are gone', () {
