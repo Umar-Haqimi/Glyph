@@ -2,3 +2,8 @@ tags:
   device:
     # Needs an Android device or emulator: flutter test integration_test -d <id>
     # Not part of `flutter test` (CI runs test/ only).
+  screenshots:
+    # Generates docs/screenshots/*.png for the README (test/screenshots).
+    # Skipped by default; run with:
+    #   flutter test --run-skipped --tags screenshots test/screenshots
+    skip: "README screenshot generator; run with --run-skipped --tags screenshots"

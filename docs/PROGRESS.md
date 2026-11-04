@@ -277,3 +277,39 @@ Notes for M9:
 - README must say: classification approximates chess.com's, privacy summary = `docs/PRIVACY.md`, build steps = `tool/build_release.sh` (`GLYPH_KEYSTORE_*`), interop table, threat model summary, credits = `docs/ASSETS.md`.
 - Before tagging: run HARDWARE_TEST A to J on the Honor phone, re-check `docs/ASSETS.md` against upstream once more (it was verified on 2026-11-04 in the M8 review), record the SF19 SSE captures (M6 note), re-record transcripts with SF19 (M4 note), and decide whether to exclude `libmultistockfish_chess.so` / `libmultistockfish_variant.so` (3.4 MB per ABI, untested option in DECISIONS M0 3.2).
 - `CHANGELOG.md` and the `v0.1.0` tag are M9.
+
+## M9 — Docs & release: done (host-verified; nothing tagged, pushed or released)
+
+Done:
+- `README.md` (what it is with real screenshots, features, classification and its approximation of chess.com, LLM provider setup incl. the per-origin http opt-in and key binding, privacy summary, build and signing steps, tests, interop table, threat model summary, known limitations, licence, credits), `CHANGELOG.md` (0.1.0, Unreleased), `docs/RELEASE.md` (keystore, env vars, `tool/build_release.sh`, the three checks, SF19 and SSE re-recording, HARDWARE_TEST, tag, GitHub release with SHA-256 sums), `docs/VECTORS.md` (pointer to `docs/m0/VECTORS.md`, which stays where it is because code, tests and vector manifests link to it).
+- **Screenshots are real renders**, not mock-ups: `app/test/screenshots/screenshots_test.dart` (tag `screenshots`, skipped by default in `app/dart_test.yaml`; run `cd app && flutter test --run-skipped --tags screenshots test/screenshots`) loads Roboto and Material Icons from the Flutter SDK cache, runs four games through the real analysis pipeline, classifier and accuracy code over recorded Stockfish transcripts (SF19 and SF16, see M4), and captures `docs/screenshots/{library,board,explain,report,settings}.png` at 1080x2340 (412x892 @ 2.625). The Explain and summary texts are canned strings from `FakeLlm` (model name `fake-client`, text says so). They are not photographs of a phone.
+- CI (`.github/workflows/ci.yml`) already ran everything SPEC 9 lists (core analyze and test, app analyze and test, release split-ABI build, permission check, banned-deps check); no change. New `.github/workflows/release.yml` on `v*` tags: tests, `tool/build_release.sh` with signing secrets (`GLYPH_KEYSTORE_BASE64`, `GLYPH_KEYSTORE_PASSWORD`, `GLYPH_KEY_ALIAS`, `GLYPH_KEY_PASSWORD`), `SHA256SUMS`, **draft** GitHub release. Never triggered.
+
+### Final acceptance checklist (SPEC section 9)
+
+Legend: MET = proven on the host (test or script); DEVICE = needs a phone, real provider or lichess account; DEVIATION = documented difference.
+
+| # | Criterion | Status | Evidence / note |
+|---|---|---|---|
+| 1 | core `dart test`, `flutter analyze`, `flutter test`, release split-ABI build pass in CI | MET locally (CI not run from here) | final M9 run; `.github/workflows/ci.yml` runs the same commands |
+| 2 | P0 mirrored blunders give identical labels | MET with DEVIATION | `packages/glyph_core/test/classify/p0_mirror_test.dart`: exact on mechanically mirrored transcripts; the recorded White/Black pairs only agree on the decisive moves (fixed-depth search is not colour-symmetric), DECISIONS M4 |
+| 3 | Accuracy within +-1 of lichess on all vectors | MET | `test/classify/win_percent_accuracy_test.dart`: 40 games, 80/80 exact |
+| 4 | Every `classify/` vector passes (castling = Best, trades not Brilliant, recapture not Great, repetition) | MET with caveat | `test/classify/classify_vectors_test.dart` (63 cases). Most transcripts are Stockfish 16, not 19 (re-record, `docs/RELEASE.md` section 2) |
+| 5 | PGN from lichess web / API / app share, chess.com download / app share imports with the full mainline | MET on golden files | `test/pgn_vectors_test.dart`; the manual check with real app shares is DEVICE (HARDWARE_TEST C, G) |
+| 6 | Exported PGN re-imports identically and shows glyphs in a lichess study | re-import MET (`pgn_vectors_test.dart` round trip, `app/test/features/export_pgn_test.dart`); lichess study DEVICE (manual, HARDWARE_TEST) |
+| 7 | ~80-ply game at Normal in <= 3 min on the primary device; cancel, background, force-stop resume | DEVICE | HARDWARE_TEST A, B. Resume logic itself is MET on the host (`test/analysis_pipeline_test.dart`, `app/test/engine/engine_service_test.dart`) |
+| 8 | Explain streams against OpenAI, OpenRouter, LAN Ollama; each error kind reachable with its copy | streaming/errors MET against fakes and a local server (`llm_client_test.dart`, `error_mapper_test.dart`, `app/test/features/explain_sheet_test.dart`, `error_copy_test.dart`); real providers DEVICE (HARDWARE_TEST D). SSE vectors are synthetic (DEVIATION, M6) |
+| 9 | Changing model, language or tone gives a fresh explanation | MET | `test/llm/cache_key_test.dart`, `explain_sheet_test.dart` (invalidation by model, language, tone, audience) |
+| 10 | Summary on by default, auto after analysis with a key, gone when off | MET | `app/test/features/summary_test.dart` |
+| 11 | Fully usable offline except Explain / summary / online import | MET on host (`app/test/startup_test.dart`: no network at start; analysis uses no network); airplane-mode run is DEVICE (HARDWARE_TEST) |
+| 12 | Release APK permissions exactly {INTERNET} | MET with DEVIATION | `tool/check_permissions.sh` OK on all three APKs; allowlists the signature-level `my.umarh.glyph.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (DECISIONS M1) |
+| 13 | API key never in SQLite, settings, logs, View prompt | MET on host (`app/test/hygiene_test.dart`, `explain_sheet_test.dart`, `key_binding_test.dart`, `llm_client_test.dart`); `adb logcat` during Explain is DEVICE (HARDWARE_TEST H6) |
+| 14 | No player names / usernames in any prompt | MET | `test/llm/prompt_builder_test.dart` (snapshots, leak test), `app/test/privacy_doc_test.dart` |
+| 15 | `http://` works for private hosts, blocked with clear copy for public | MET on host (`test/llm/base_url_policy_test.dart`, `llm_settings_test.dart`); real LAN Ollama DEVICE (HARDWARE_TEST D) |
+| 16 | Every cap in SPEC 6 has a passing test | MET with DEVIATION | `test/limits_caps_test.dart`; only the 15 s connect timeout has no behavioural test (`app/test/platform_http_test.dart` checks it is applied), DECISIONS M8 |
+| 17 | About shows GPL notice, source link, Stockfish credit, asset licences; no Firebase/ads/analytics in `pubspec.lock` | MET with DEVIATION | `app/test/features/about_screen_test.dart`, `asset_licences_test.dart`, `tool/check_banned_deps.sh`. The source link is displayed and copied, not opened (no `url_launcher`), DECISIONS M8 |
+| 18 | DECISIONS, PROGRESS, VECTORS, HARDWARE_TEST, PRIVACY, README exist and are complete | MET with caveats | all exist (`docs/VECTORS.md` is a pointer to `docs/m0/VECTORS.md`); HARDWARE_TEST results are empty until a device run |
+
+Other SPEC M9 items: `CHANGELOG.md` MET; tag `v0.1.0` and GitHub release NOT DONE on purpose (maintainer decision; steps in `docs/RELEASE.md`).
+
+Before tagging (all in `docs/RELEASE.md`): create the keystore, run `tool/build_release.sh`, HARDWARE_TEST A to J on the Honor phone, SF19 transcript re-recording, real SSE captures, lichess-study import check, optional removal of the two unused engine libraries.
