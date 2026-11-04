@@ -16,7 +16,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-const _ua = 'Glyph-vectors (https://github.com/umarh/glyph)';
+const _ua = 'Glyph-vectors (https://github.com/Umar-Haqimi/Glyph)';
 const _users = ['DrNykterstein', 'penguingim1', 'Fins'];
 const _outDir = 'packages/glyph_core/test/vectors/lichess_accuracy';
 

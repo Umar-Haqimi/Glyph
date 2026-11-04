@@ -13,6 +13,15 @@ void main() {
       expect(Limits.maxCommentBytes, 4096);
     });
 
+    test('online fetch: 30 by default, never more than 50; response, retry and wait caps', () {
+      expect(Limits.defaultOnlineGames, 30);
+      expect(Limits.maxOnlineResponseBytes, 16 * 1024 * 1024);
+      expect(Limits.maxChessComArchiveRequests, 36);
+      expect(Limits.rateLimitWait, const Duration(seconds: 60));
+      expect(Limits.maxRateLimitWait, const Duration(minutes: 5));
+      expect(Limits.maxRateLimitRetries, 2);
+    });
+
     test('online fetch caps', () {
       expect(Limits.maxOnlineGames, 50);
       expect(Limits.maxNdjsonLineBytes, 1024 * 1024);

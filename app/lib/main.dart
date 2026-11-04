@@ -9,6 +9,7 @@ import 'data/providers.dart';
 import 'data/sqlite_repositories.dart';
 import 'engine/engine_providers.dart';
 import 'features/settings/explain_settings.dart';
+import 'platform/online_http.dart';
 import 'platform/secret_store.dart';
 
 Future<void> main() async {
@@ -28,6 +29,7 @@ Future<void> main() async {
         settingsRepositoryProvider.overrideWithValue(SqliteSettingsRepository(db)),
         llmCacheRepositoryProvider.overrideWithValue(SqliteLlmCacheRepository(db)),
         secretStoreProvider.overrideWithValue(const FlutterSecretStore()),
+        onlineCacheProvider.overrideWithValue(SqliteOnlineCache(db)),
       ],
       child: const EngineReloadGuard(child: GlyphApp()),
     ),

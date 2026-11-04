@@ -186,3 +186,31 @@ Tests: core 555 -> see final counts below; app 309 -> see final counts below. Ne
 
 Behaviour changes to know about: an existing install keeps working (keys are bound on first read); a user who had edited the OpenAI / OpenRouter address now finds the connection on Custom with no key (re-enter it); a LAN Ollama key is no longer sent over http until the switch is turned on; the report shows a saved summary by reading the cache on open, so a summary that is not in the cache (cut off, filtered) is gone after leaving the report. `docs/HARDWARE_TEST.md` is unchanged.
 
+
+## M7 — Online import, sharing, export: done (host-verified; Android-native parts not built or run)
+
+Done:
+- `glyph_core/online/`: `LichessClient` (NDJSON streamed, byte-level line splitting, max 30 games, `pgnInJson` + clocks + evals + opening, malformed / over-long lines skipped, variants filtered) and `ChessComClient` (archives list -> months newest-first until 30, `rules` chess / chess960 only, `ETag` / `If-None-Match` with a stored trimmed copy, month 404 / 410 skipped, player 404 / 410 mapped), both on a shared `OnlineTransport` (timeouts, no redirects, abortable, caps, 429 = wait >= 60 s with ticks, cancellable, 2 retries), `OnlineGamesClient` interface, `OnlineCache`, `Usernames`, `sanitizeFileName` / `exportFileName`. Verified once by hand against the real APIs (5 lichess games, 5 chess.com games, ETag round trip, unknown users): all PGNs parse.
+- App: **From lichess / From chess.com** screens in the Import sheet (rows enabled; username prefilled; Fetch / Cancel; live status incl. the 429 countdown; speed chips; multi-select with Select all / none; "In your library" dedupe on `(source, source_id)`; Import N, one game opens its board); **Settings > Accounts** (F15; validated formats; detection at import, see policy below); **share / Open with intake** (Kotlin `MethodChannel`, manifest intent filters, Dart decoding with caps, `ShareIntakeHost` routing into the game picker, source "share"); **Export PGN** from the board overflow menu and each library card (annotated PGN through the share sheet as a `.pgn` attachment + text, sanitised file name, FileProvider on the cache folder, no storage permission).
+- Data: `GameRepository.idsBySource`, `http_cache` table (migration 4) with `SqliteOnlineCache`.
+- Tests: core **650** (+3 skipped; was 555 at M6, ~84 new: clients over a local `HttpServer`, NDJSON splitter, usernames, file names, limits, hygiene), app **430** (was 309 at M6; ~85 new): online import flows and errors, accounts, intake (Dart side with a fake channel, `decideShare`, routing), export (service, menus, re-import), Android config text checks (no new permission, intent filters, FileProvider, 2 MB cap), DB migration 4 and cache, hygiene (network allow-list now two files, User-Agent, no hosts in the app).
+- `flutter analyze`, `dart analyze`, `dart test`, `flutter test`, `tool/check_banned_deps.sh` are green. `pubspec.lock` is unchanged (no new dependency).
+
+Deviations / notes (details in DECISIONS "M7 decisions"):
+- **Selection model**: SPEC 4 says "tap -> Save"; M7 has checkboxes + Import (multi-select was requested). One imported game opens its board.
+- **Shared links are not fetched** (SPEC F2 names PGN text and files); a dialog explains. Text and files from Share / Open with are source `share`.
+- **Re-detection policy**: the side is detected once, at import (online imports: by the fetched account, else by the configured names). Changing a username does not rewrite games already in the library, because `user_side` is shared with the manual "Set your side". Nothing auto-saves the typed username into Settings.
+- **chess.com ETag cache adds a table** (`http_cache`, migration 4) holding our trimmed copy of a month; SPEC 5.4 has no such table.
+- User-Agent repo URL set to `https://github.com/Umar-Haqimi/Glyph` (`app/lib/app_info.dart`).
+- 429: up to 2 retries (3 requests) with >= 60 s waits, then "still asking us to slow down".
+- Export attaches the PGN as a file **and** as text (`EXTRA_TEXT`): some targets (chat apps) may show both. Original free-text comments / NAGs of an imported game are not re-exported (M2 decision).
+- `androidx.core:core:1.13.1` is declared in `app/build.gradle.kts` for `FileProvider`.
+- The import sheet became scrollable and `GameCard` got a menu button (both found/needed by the new tests).
+- **Not verified here (no Android SDK / device)**: the Kotlin in `MainActivity.kt` has never been compiled; the manifest merge, `flutter build apk --release --split-per-abi` and `tool/check_permissions.sh` were not run; real behaviour of the intent filters from the lichess / chess.com apps and from file managers, `singleTop` + `taskAffinity=""` (inherited from the Flutter template) when a share arrives while the app runs in another task, the share sheet's handling of `EXTRA_STREAM` + `EXTRA_TEXT`, and the FileProvider classpath. All listed in `docs/HARDWARE_TEST.md` section G.
+
+Notes for M8:
+- `docs/PRIVACY.md` must list the requests to `lichess.org` and `api.chess.com`: the username in the URL path, the generic User-Agent (`Glyph/<version> (+repo URL)`), nothing else (no credentials, no cookies), plus the local `http_cache` table (public game data keyed by URL), the share intake (read in memory, capped at 2 MB, never stored), and the export (one PGN in `cache/shared_pgn`, replaced by the next export).
+- The About screen can use `appVersion` / `projectUrl` from `app/lib/app_info.dart`.
+- Error copy for the online fetch exists for every `OnlineErrorKind` (`onlineError*` in the ARB); M8's "all error copy wired" pass should only need to review wording.
+- Settings still lacks the Engine and general F19 sections; Accounts is in place.
+- Run the device checklist section G first; if `MainActivity.kt` fails to compile, the likely culprits are the `androidx.core` import (FileProvider) and the `use { return ... }` non-local return in `readCapped`.

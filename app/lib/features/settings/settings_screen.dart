@@ -4,10 +4,11 @@ import 'package:material_ui/material_ui.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
 import '../../theme/theme_providers.dart';
+import 'accounts_settings_section.dart';
 import 'explanation_settings_section.dart';
 
-/// Settings: Explanations (M6) and Appearance. The engine, accounts and
-/// general sections come with M7 / M8.
+/// Settings: Explanations (M6), Accounts (M7) and Appearance. The engine and
+/// general sections come with M8.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -26,6 +27,8 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: [
           const ExplanationSettingsSection(),
+          const Divider(),
+          const AccountsSettingsSection(),
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

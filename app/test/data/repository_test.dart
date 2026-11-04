@@ -44,6 +44,20 @@ void contract(String name, Repos Function() create) {
     late Repos r;
     setUp(() => r = create());
 
+    test('idsBySource finds the games already imported from a source (dedupe key)', () async {
+      final a = await r.games.save(newGame(sourceId: 'aaaa1111', source: GameSource.lichess));
+      final b = await r.games.save(newGame(sourceId: 'https://www.chess.com/game/live/1', source: GameSource.chesscom));
+      await r.games.save(newGame(sourceId: 'bbbb2222', source: GameSource.lichess));
+      await r.games.save(newGame()); // no source id
+      final found = await r.games.idsBySource(GameSource.lichess, ['aaaa1111', 'cccc3333', 'https://www.chess.com/game/live/1']);
+      expect(found, {'aaaa1111': a.id});
+      expect(await r.games.idsBySource(GameSource.chesscom, ['https://www.chess.com/game/live/1']), {'https://www.chess.com/game/live/1': b.id});
+      expect(await r.games.idsBySource(GameSource.lichess, const []), isEmpty);
+      expect(await r.games.idsBySource(GameSource.paste, ['aaaa1111']), isEmpty, reason: 'the source is part of the key');
+      final many = [for (var i = 0; i < 450; i++) 'id$i'];
+      expect(await r.games.idsBySource(GameSource.lichess, many), isEmpty, reason: 'more ids than SQLite binds at once');
+    });
+
     test('save and read back every column', () async {
       final saved = await r.games.save(newGame(sourceId: 'abc', source: GameSource.lichess, userSide: Side.black));
       expect(saved.duplicate, isFalse);
@@ -404,17 +418,50 @@ void main() {
     );
   });
 
+  group('SqliteOnlineCache', () {
+    test('stores an ETag with its body, replaces on put, bounds the table', () async {
+      var now = 0;
+      final db = Db.inMemory();
+      addTearDown(db.close);
+      final cache = SqliteOnlineCache(db, maxEntries: 3, nowMs: () => ++now);
+      expect(await cache.get('k'), isNull);
+      await cache.put('k', const CachedResponse('W/"1"', 'body1'));
+      await cache.put('k', const CachedResponse('W/"2"', 'body2'));
+      final got = (await cache.get('k'))!;
+      expect((got.etag, got.body), ('W/"2"', 'body2'));
+      for (var i = 0; i < 5; i++) {
+        await cache.put('e$i', CachedResponse('t$i', 'b$i'));
+      }
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM http_cache').first['n'], 3);
+      expect(await cache.get('k'), isNull, reason: 'the oldest entries go first');
+      expect(await cache.get('e4'), isNotNull);
+    });
+
+    test('a version 3 database upgrades to 4 and keeps its games', () async {
+      final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v3.db';
+      addTearDown(() => File(path).parent.deleteSync(recursive: true));
+      final v3 = Db.open(path, migrations: Db.migrations.take(3).toList());
+      final id = (await SqliteGameRepository(v3).save(newGame(sourceId: 'keep'))).id;
+      v3.close();
+      final db = Db.open(path);
+      addTearDown(db.close);
+      expect(db.raw.userVersion, 4);
+      expect((await SqliteGameRepository(db).get(id))!.sourceId, 'keep');
+      expect(db.raw.select('SELECT COUNT(*) AS n FROM http_cache').first['n'], 0);
+    });
+  });
+
   group('Db', () {
     test('creates the SPEC 5.4 schema (plus llm_cache.game_id from M6) at the latest user_version', () {
       final db = Db.inMemory();
       addTearDown(db.close);
-      expect(db.raw.userVersion, 3);
-      expect(Db.schemaVersion, 3);
+      expect(db.raw.userVersion, 4);
+      expect(Db.schemaVersion, 4);
       final tables = db.raw
           .select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
           .map((r) => r['name'])
           .toList();
-      expect(tables, ['analyses', 'games', 'llm_cache', 'move_labels', 'position_lines', 'settings']);
+      expect(tables, ['analyses', 'games', 'http_cache', 'llm_cache', 'move_labels', 'position_lines', 'settings']);
       List<String> cols(String t) => db.raw.select('PRAGMA table_info($t)').map((r) => r['name'] as String).toList();
       expect(cols('games'), [
         'id', 'source', 'source_id', 'pgn', 'white', 'black', 'white_elo', 'black_elo', 'result', 'date',
@@ -429,6 +476,7 @@ void main() {
       expect(cols('move_labels'), ['game_id', 'ply', 'label', 'ep_loss', 'win_before', 'win_after', 'best_uci']);
       expect(cols('llm_cache'), ['key', 'kind', 'content', 'model', 'created_at', 'game_id']);
       expect(cols('settings'), ['key', 'value']);
+      expect(cols('http_cache'), ['key', 'etag', 'body', 'updated_at']);
     });
 
     test('foreign keys are on and CHECK constraints hold', () {
@@ -503,7 +551,7 @@ void main() {
       v1.close();
       final db = Db.open(path);
       addTearDown(db.close);
-      expect(db.raw.userVersion, 3);
+      expect(db.raw.userVersion, Db.schemaVersion);
       final row = db.raw.select('SELECT * FROM llm_cache').single;
       expect(row['content'], 'text');
       expect(row['game_id'], isNull);
@@ -533,7 +581,7 @@ void main() {
 
       final db = Db.open(path);
       addTearDown(db.close);
-      expect(db.raw.userVersion, 3);
+      expect(db.raw.userVersion, Db.schemaVersion);
       expect(db.raw.select('PRAGMA foreign_keys').first.values.first, 1, reason: 'switched back on after the rebuild');
       expect(db.raw.select('PRAGMA foreign_key_check'), isEmpty);
       // Data survived, ids included.

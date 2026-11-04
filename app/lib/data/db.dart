@@ -22,7 +22,7 @@ class Db {
 
   /// Migration `i` upgrades `user_version` i to i + 1. Never edit a shipped
   /// migration; append a new one.
-  static final List<void Function(Database db)> migrations = [_v1, _v2, _v3];
+  static final List<void Function(Database db)> migrations = [_v1, _v2, _v3, _v4];
 
   void _init() {
     raw.execute('PRAGMA foreign_keys = ON');
@@ -190,4 +190,17 @@ WHERE game_id IS NULL OR game_id IN (SELECT id FROM games)''');
   db.execute('DROP TABLE llm_cache');
   db.execute('ALTER TABLE llm_cache_new RENAME TO llm_cache');
   db.execute('CREATE INDEX llm_cache_game ON llm_cache (game_id)');
+}
+
+/// M7: `http_cache`, the `ETag`s of the chess.com archive requests together with
+/// the (trimmed) data they stand for, so a 304 can be answered from disk. Holds
+/// public game data keyed by request URL; bounded by the repository.
+void _v4(Database db) {
+  db.execute('''
+CREATE TABLE http_cache (
+  key TEXT PRIMARY KEY,
+  etag TEXT NOT NULL,
+  body TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+)''');
 }

@@ -94,6 +94,24 @@ Legend for `Result`: PASS / FAIL / N/A, plus measured values. Add a note for eve
 | F5 | Install on latest-API emulator (E2) and launch | Engine starts, analysis completes | | |
 | F6 | Clear-text request to LAN host works on API 28+ (E2) | Works | | |
 
+### G. Online import, share intake and export (M7; nothing here could be built or run in the cloud container: no Android SDK)
+
+| # | Step | Expected | Result | Notes |
+|---|---|---|---|---|
+| G1 | `flutter build apk --release --split-per-abi` after M7, then `tool/check_permissions.sh` | Builds (Kotlin `MainActivity`, `androidx.core` FileProvider); permissions still `INTERNET` + the androidx signature permission only | | |
+| G2 | Import > From lichess with a real username (prefilled after Settings > Accounts) | Games stream in, speed chips filter, select two, Import: both in the library with the source "lichess" and the right side ("You") | | |
+| G3 | Import > From chess.com, a user with games in several months | 30 newest games, variants (bughouse, crazyhouse) absent, import works; fetch again right away is quick (ETag 304) | | |
+| G4 | Fetch twice for the same user, import, fetch again | Imported games show "In your library" and cannot be selected | | |
+| G5 | Provoke a lichess 429 (fetch repeatedly) or throttle with a proxy | "Lichess asked us to slow down. Retrying in N s." counts down from 60; Cancel stops it at once; without Cancel the fetch resumes by itself | | |
+| G6 | Airplane mode, then Fetch | "No connection."; a wrong username gives "has no user with that name" | | |
+| G7 | lichess app: share a game as text (PGN) while Glyph is closed, then while it is open and in the background | Glyph opens on the game picker (no duplicate task, no replay when reopening from recents); Save opens the board | | |
+| G8 | chess.com app: share a game (text) | Same; the preamble text before the PGN is ignored | | |
+| G9 | Share a lichess / chess.com **link** to Glyph | Dialog says links are not imported and points to From lichess / From chess.com; nothing is fetched | | |
+| G10 | Files app: open a `.pgn` with Glyph ("Open with"), also from Downloads and from a mail attachment; share a `.pgn` from Files | Opens the picker; a 3 MB file shows "larger than 2 MB" without freezing | | |
+| G11 | Board > menu > Export PGN, and the card menu in the library | Share sheet shows a `.pgn` attachment named `White_vs_Black_date.pgn`; pick Gmail / Drive / lichess: content arrives, no storage permission prompt | | |
+| G12 | Paste the exported PGN into a lichess study ("Import PGN") | See E2; plus `adb shell run-as my.umarh.glyph ls cache/shared_pgn` holds only the last export | | |
+| G13 | TalkBack on the online list and the share screens | Each game is one checkbox reading players, details, selected state; the status line is announced when it changes | | |
+
 ## Sign-off
 
 | Field | Value |

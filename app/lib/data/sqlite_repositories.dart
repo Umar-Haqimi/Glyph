@@ -106,6 +106,21 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
   @override
   Future<void> setUserSide(int id, Side? side) async =>
       _db.raw.execute('UPDATE games SET user_side = ? WHERE id = ?', [side?.name, id]);
+
+  @override
+  Future<Map<String, int>> idsBySource(GameSource source, Iterable<String> sourceIds) async {
+    final out = <String, int>{};
+    final ids = sourceIds.toSet().toList();
+    // Chunked: SQLite limits the number of bound variables.
+    for (var i = 0; i < ids.length; i += 200) {
+      final chunk = ids.sublist(i, i + 200 > ids.length ? ids.length : i + 200);
+      final marks = List.filled(chunk.length, '?').join(', ');
+      for (final r in _db.raw.select('SELECT id, source_id FROM games WHERE source = ? AND source_id IN ($marks)', [source.name, ...chunk])) {
+        out[r['source_id'] as String] = r['id'] as int;
+      }
+    }
+    return out;
+  }
 }
 
 class SqliteAnalysisRepository implements AnalysisRepository {
@@ -366,4 +381,37 @@ class SqliteSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> remove(String key) async => _db.raw.execute('DELETE FROM settings WHERE key = ?', [key]);
+}
+
+/// ETags and the data they stand for (chess.com), see [OnlineCache]. The table
+/// is bounded: the newest [maxEntries] rows are kept.
+class SqliteOnlineCache implements OnlineCache {
+  SqliteOnlineCache(this._db, {this.maxEntries = 100, int Function()? nowMs})
+      : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+
+  final Db _db;
+  final int maxEntries;
+  final int Function() _nowMs;
+
+  @override
+  Future<CachedResponse?> get(String key) async {
+    final rows = _db.raw.select('SELECT etag, body FROM http_cache WHERE key = ?', [key]);
+    if (rows.isEmpty) return null;
+    return CachedResponse(rows.first['etag'] as String, rows.first['body'] as String);
+  }
+
+  @override
+  Future<void> put(String key, CachedResponse response) async {
+    _db.transaction(() {
+      _db.raw.execute(
+        'INSERT INTO http_cache (key, etag, body, updated_at) VALUES (?, ?, ?, ?) '
+        'ON CONFLICT(key) DO UPDATE SET etag = excluded.etag, body = excluded.body, updated_at = excluded.updated_at',
+        [key, response.etag, response.body, _nowMs()],
+      );
+      _db.raw.execute(
+        'DELETE FROM http_cache WHERE key NOT IN (SELECT key FROM http_cache ORDER BY updated_at DESC, rowid DESC LIMIT ?)',
+        [maxEntries],
+      );
+    });
+  }
 }

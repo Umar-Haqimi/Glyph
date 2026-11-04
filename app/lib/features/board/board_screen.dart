@@ -9,6 +9,7 @@ import '../../data/providers.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
+import '../export/export_pgn.dart';
 import '../library/library_controller.dart';
 import '../settings/engine_settings.dart';
 import '../report/report_screen.dart';
@@ -42,7 +43,7 @@ class BoardScreen extends ConsumerStatefulWidget {
   ConsumerState<BoardScreen> createState() => _BoardScreenState();
 }
 
-enum _MenuAction { bestArrow, setSide, reanalyse, delete }
+enum _MenuAction { bestArrow, setSide, reanalyse, export, delete }
 
 class _BoardScreenState extends ConsumerState<BoardScreen> {
   bool _autoStarted = false;
@@ -262,6 +263,8 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                     _chooseSide(data);
                   case _MenuAction.reanalyse:
                     _chooseReanalyseDepth(data);
+                  case _MenuAction.export:
+                    exportGamePgn(context, ref, data.record.id);
                   case _MenuAction.delete:
                     _confirmDelete(data);
                 }
@@ -282,6 +285,11 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                   key: const Key('menu-reanalyse'),
                   value: _MenuAction.reanalyse,
                   child: Text(l10n.boardMenuReanalyse),
+                ),
+                PopupMenuItem(
+                  key: const Key('menu-export'),
+                  value: _MenuAction.export,
+                  child: Text(l10n.exportPgn),
                 ),
                 PopupMenuItem(
                   key: const Key('menu-delete'),

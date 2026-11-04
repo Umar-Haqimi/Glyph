@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
+import '../export/export_pgn.dart';
 import '../import/import_sheet.dart';
 import 'game_text.dart';
 import 'library_controller.dart';
@@ -125,7 +126,7 @@ class _GameList extends ConsumerWidget {
 }
 
 /// One game in the library.
-class GameCard extends StatelessWidget {
+class GameCard extends ConsumerWidget {
   const GameCard({super.key, required this.game});
 
   final GameRecord game;
@@ -156,7 +157,7 @@ class GameCard extends StatelessWidget {
   static String _accuracy(double v) => Accuracy.display(v).toString();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final chips = <String>[
@@ -181,36 +182,74 @@ class GameCard extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).pushNamed(Routes.board, arguments: game.id),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          // The menu button is a 48 dp target; the right padding is 4 so that
+          // its icon lines up with the card's 16 dp inset (the rows below
+          // add the missing 12).
+          padding: const EdgeInsets.fromLTRB(16, 0, 4, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                l10n.libraryGameTitle(
-                  _player(l10n, game.white, game.whiteElo),
-                  _player(l10n, game.black, game.blackElo),
-                ),
-                style: theme.textTheme.titleMedium,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (opening.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(opening, style: theme.textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final c in chips)
-                    Chip(
-                      label: Text(c),
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      labelStyle: theme.textTheme.labelMedium,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        l10n.libraryGameTitle(
+                          _player(l10n, game.white, game.whiteElo),
+                          _player(l10n, game.black, game.blackElo),
+                        ),
+                        style: theme.textTheme.titleMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                  ),
+                  PopupMenuButton<_CardAction>(
+                    key: Key('game-menu-${game.id}'),
+                    tooltip: l10n.boardMenuTooltip,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _CardAction.export:
+                          exportGamePgn(context, ref, game.id);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        key: Key('game-export-${game.id}'),
+                        value: _CardAction.export,
+                        child: Text(l10n.exportPgn),
+                      ),
+                    ],
+                  ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (opening.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(opening, style: theme.textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final c in chips)
+                          Chip(
+                            label: Text(c),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            labelStyle: theme.textTheme.labelMedium,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -219,3 +258,5 @@ class GameCard extends StatelessWidget {
     );
   }
 }
+
+enum _CardAction { export }

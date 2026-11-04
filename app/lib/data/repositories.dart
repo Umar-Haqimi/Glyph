@@ -18,6 +18,11 @@ abstract interface class GameRepository {
   Future<void> delete(int id);
 
   Future<void> setUserSide(int id, Side? side);
+
+  /// Which of [sourceIds] already exist for [source]: source id -> game id.
+  /// The online import uses it to mark games that are in the library
+  /// (dedupe on `(source, source_id)`).
+  Future<Map<String, int>> idsBySource(GameSource source, Iterable<String> sourceIds);
 }
 
 /// Per-game analysis results, written by the engine pipeline.

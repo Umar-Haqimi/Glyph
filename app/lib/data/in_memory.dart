@@ -34,6 +34,15 @@ class InMemoryGameRepository implements GameRepository {
     return SaveResult(id, duplicate: false);
   }
 
+  @override
+  Future<Map<String, int>> idsBySource(GameSource source, Iterable<String> sourceIds) async {
+    final wanted = sourceIds.toSet();
+    return {
+      for (final e in store.games.entries)
+        if (e.value.source == source && e.value.sourceId != null && wanted.contains(e.value.sourceId)) e.value.sourceId!: e.key,
+    };
+  }
+
   GameRecord _record(int id, NewGame g) {
     final a = store.analyses[id];
     return GameRecord.from(

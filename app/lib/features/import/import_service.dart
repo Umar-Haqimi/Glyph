@@ -13,7 +13,11 @@ class ImportService {
 
   final Ref _ref;
 
-  Future<SaveResult> save(Game game, GameSource source, {String? sourceId}) async {
+  /// [userSide] is a side that is already known (an online import knows which
+  /// account it fetched); without it the side comes from the configured
+  /// account names (SPEC F15). Detection runs once, at import: changing a
+  /// name later does not touch games already in the library.
+  Future<SaveResult> save(Game game, GameSource source, {String? sourceId, Side? userSide}) async {
     OpeningBook? book;
     try {
       book = await _ref.read(openingBookProvider.future);
@@ -21,11 +25,12 @@ class ImportService {
       book = null;
     }
     final settings = _ref.read(settingsRepositoryProvider);
-    final side = detectUserSide(
-      game,
-      lichessUsername: await settings.get(SettingsKeys.lichessUsername),
-      chessComUsername: await settings.get(SettingsKeys.chessComUsername),
-    );
+    final side = userSide ??
+        detectUserSide(
+          game,
+          lichessUsername: await settings.get(SettingsKeys.lichessUsername),
+          chessComUsername: await settings.get(SettingsKeys.chessComUsername),
+        );
     final result = await _ref.read(gameRepositoryProvider).save(
           NewGame.fromGame(
             game,

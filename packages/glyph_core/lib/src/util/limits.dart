@@ -18,8 +18,34 @@ abstract final class Limits {
   /// Maximum number of games fetched from an online source in one go.
   static const int maxOnlineGames = 50;
 
+  /// Default number of games fetched per username (SPEC section 10: 30).
+  static const int defaultOnlineGames = 30;
+
   /// Maximum length of one NDJSON line from an online source, in bytes: 1 MB.
+  /// A longer line is skipped (its bytes are dropped as they arrive).
   static const int maxNdjsonLineBytes = 1024 * 1024;
+
+  /// Maximum bytes read from one response of lichess or chess.com: 16 MB (a
+  /// chess.com month with 583 games is 2.4 MB, 30 lichess games with
+  /// evaluations about 100 KB). Beyond it the fetch fails with `tooLarge`.
+  static const int maxOnlineResponseBytes = 16 * 1024 * 1024;
+
+  /// Maximum number of chess.com monthly archives requested for one fetch
+  /// (requests are serial; users with a game every few months need many).
+  static const int maxChessComArchiveRequests = 36;
+
+  /// Longest wait accepted after an HTTP 429 (a larger `Retry-After` is cut).
+  static const Duration maxRateLimitWait = Duration(minutes: 5);
+
+  /// Wait after an HTTP 429: lichess asks for "a full minute".
+  static const Duration rateLimitWait = Duration(seconds: 60);
+
+  /// How often a 429 is retried before the fetch gives up.
+  static const int maxRateLimitRetries = 2;
+
+  /// Largest cached chess.com month (our trimmed copy), in bytes; a larger one
+  /// is simply not cached.
+  static const int maxOnlineCacheBodyBytes = 1024 * 1024;
 
   /// Maximum size of an LLM response stream, in bytes: 32 KB. Beyond this the
   /// stream is stopped and the result is marked truncated.

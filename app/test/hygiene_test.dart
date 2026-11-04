@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glyph/app_info.dart';
 import 'package:glyph/platform/app_log.dart';
 
 void main() {
@@ -90,9 +91,9 @@ void main() {
       }
     });
 
-    test('the only file that opens a network connection is platform/llm_http.dart', () {
+    test('the only files that open a network connection are platform/llm_http.dart (the LLM) and platform/online_http.dart (lichess, chess.com)', () {
       for (final f in sources()) {
-        if (f.path.endsWith('platform/llm_http.dart')) continue;
+        if (f.path.endsWith('platform/llm_http.dart') || f.path.endsWith('platform/online_http.dart')) continue;
         final text = f.readAsStringSync();
         expect(text, isNot(contains('package:http/')), reason: f.path);
         expect(RegExp(r'\b(HttpClient|WebSocket|RawSocket|Socket\.connect)\b').hasMatch(text), isFalse, reason: f.path);
@@ -156,6 +157,30 @@ void main() {
       addTearDown(() => AppLog.sink = old);
       AppLog.warning('Reading the API key failed', Exception('Bearer sk-secret-123 and a prompt'));
       expect(lines, ['Reading the API key failed (_Exception)']);
+    });
+  });
+
+  group('online requests (SPEC 6)', () {
+    test('appVersion matches pubspec.yaml and the User-Agent is a generic client name with the repository URL', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(RegExp(r'^version: (\d+\.\d+\.\d+)\+', multiLine: true).firstMatch(pubspec)!.group(1), appVersion);
+      expect(onlineUserAgent, 'Glyph/$appVersion (+$projectUrl)');
+      expect(onlineUserAgent, isNot(contains('@')));
+      expect(projectUrl, startsWith('https://github.com/'));
+    });
+
+    test('the hosts are not named outside the core clients (no URL building in the app)', () {
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart') && !f.path.contains('/l10n/'))) {
+        final text = f.readAsStringSync();
+        expect(RegExp(r'https?://(lichess\.org|api\.chess\.com)').hasMatch(text), isFalse, reason: f.path);
+      }
+    });
+
+    test('usernames and URLs are never logged: the fetch code passes AppLog only the error object', () {
+      for (final name in ['features/import/online_import_controller.dart', 'features/import/online_import_screen.dart']) {
+        final text = File('lib/$name').readAsStringSync();
+        expect(RegExp(r'\b(debugPrint|log)\(').hasMatch(text), isFalse, reason: name);
+      }
     });
   });
 }

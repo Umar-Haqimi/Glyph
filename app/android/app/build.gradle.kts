@@ -81,6 +81,12 @@ kotlin {
     }
 }
 
+dependencies {
+    // FileProvider for the exported PGN (MainActivity.sharePgn). Already on the classpath through
+    // the Flutter embedding; stated so the build does not depend on that.
+    implementation("androidx.core:core:1.13.1")
+}
+
 flutter {
     source = "../.."
 }

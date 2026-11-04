@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only place the app hands out through a FileProvider: the PGN it is about to
+     share (see MainActivity.sharePgn). Nothing else of the cache is reachable. -->
+<paths>
+    <cache-path name="shared_pgn" path="shared_pgn/" />
+</paths>

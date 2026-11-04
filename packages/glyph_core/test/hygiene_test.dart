@@ -46,4 +46,23 @@ void main() {
       expect(RegExp('apiKey|api_key|secret', caseSensitive: false).hasMatch(code), isFalse);
     });
   });
+
+  group('online clients (SPEC 6)', () {
+    test('hosts are hard-coded https; a User-Agent is passed in, never built from user data', () {
+      for (final name in ['lichess_client', 'chesscom_client']) {
+        final text = File('lib/src/online/$name.dart').readAsStringSync();
+        expect(text, contains("defaultBaseUrl = 'https://"), reason: name);
+        expect(text, isNot(contains("'http://")), reason: name);
+      }
+      final transport = File('lib/src/online/online_transport.dart').readAsStringSync();
+      expect(RegExp(r"'User-Agent': userAgent").hasMatch(transport), isTrue);
+      // The only header values the clients set are fixed strings or the ETag.
+      for (final f in sources('lib/src/online')) {
+        final text = f.readAsStringSync();
+        expect(RegExp('mailto|@[a-z]+\\.(com|org)', caseSensitive: false).hasMatch(text), isFalse, reason: f.path);
+        expect(text, isNot(contains('dart:io')), reason: f.path);
+        expect(RegExp('cookie|authorization', caseSensitive: false).hasMatch(text), isFalse, reason: f.path);
+      }
+    });
+  });
 }

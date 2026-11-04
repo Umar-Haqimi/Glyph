@@ -241,12 +241,5 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(l10n.importFileOpenFailed), findsOneWidget);
     });
-
-    testWidgets('lichess and chess.com rows are not available yet', (tester) async {
-      await TestEnv().pump(tester);
-      await tester.tap(find.text(l10n.libraryImportFab));
-      await tester.pumpAndSettle();
-      expect(find.text(l10n.importComingSoon), findsNWidgets(2));
-    });
   });
 }

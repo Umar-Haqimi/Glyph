@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' show Size;
@@ -13,6 +14,9 @@ import 'package:glyph/engine/engine_providers.dart';
 import 'package:glyph/l10n/app_localizations_en.dart';
 import 'package:glyph/features/settings/explain_settings.dart';
 import 'package:glyph/platform/file_picker_service.dart';
+import 'package:glyph/platform/online_http.dart';
+import 'package:glyph/platform/pgn_share_service.dart';
+import 'package:glyph/platform/share_intake.dart';
 import 'package:glyph/platform/secret_store.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:glyph_core/testing.dart';
@@ -36,6 +40,39 @@ class FakeFilePicker implements FilePickerService {
   }
 }
 
+/// The platform side of Share / Open with: tests push [SharedContent] into it.
+class FakeShareIntake implements ShareIntakeService {
+  final _controller = StreamController<SharedContent>.broadcast();
+  int starts = 0;
+
+  @override
+  Stream<SharedContent> get shared => _controller.stream;
+
+  @override
+  Future<void> start() async => starts++;
+
+  void push(SharedContent content) => _controller.add(content);
+}
+
+/// The Android share sheet: records what was shared.
+class FakePgnShare implements PgnShareService {
+  final shared = <({String pgn, String fileName, String title})>[];
+  Object? error;
+
+  @override
+  Future<void> share({required String pgn, required String fileName, required String title}) async {
+    if (error != null) throw error!;
+    shared.add((pgn: pgn, fileName: fileName, title: title));
+  }
+}
+
+/// A game source that is always offline.
+class OfflineOnlineClient implements OnlineGamesClient {
+  @override
+  Future<OnlineFetchOutcome> fetchGames(String username, {int max = 30, OnlineCancelToken? cancel, void Function(OnlineEvent event)? onEvent}) async =>
+      const OnlineFetchOutcome(error: OnlineFetchError(OnlineErrorKind.offline));
+}
+
 /// An [LlmClient] whose connection always fails.
 LlmClient offlineLlmClient() =>
     LlmClient(httpClient: () => MockClient((request) async => throw http.ClientException('offline in tests')));
@@ -43,6 +80,7 @@ LlmClient offlineLlmClient() =>
 class TestEnv {
   TestEnv({
     Map<String, String>? settings,
+    InMemorySettingsRepository? settingsRepo,
     FilePickerService? picker,
     OpeningBook? book,
     EngineDriverFactory? driverFactory,
@@ -50,6 +88,10 @@ class TestEnv {
     Map<String, String>? secrets,
     InMemorySecretStore? secretStore,
     LlmClient? llm,
+    OnlineGamesClient? lichess,
+    OnlineGamesClient? chessCom,
+    FakeShareIntake? intake,
+    FakePgnShare? pgnShare,
     this.timeouts = const PipelineTimeouts(
       handshake: Duration(seconds: 2),
       stop: Duration(milliseconds: 100),
@@ -57,12 +99,16 @@ class TestEnv {
     ),
   })
       : store = InMemoryStore(),
-        settings = InMemorySettingsRepository(settings),
+        settings = settingsRepo ?? InMemorySettingsRepository(settings),
         picker = picker ?? FakeFilePicker(null),
         book = book ?? OpeningBook(const {}),
         driverFactory = driverFactory ?? (() async => FakeEngineDriver.permissive()),
         secrets = secretStore ?? InMemorySecretStore(secrets),
-        llm = llm ?? offlineLlmClient() {
+        llm = llm ?? offlineLlmClient(),
+        lichess = lichess ?? OfflineOnlineClient(),
+        chessCom = chessCom ?? OfflineOnlineClient(),
+        intake = intake ?? FakeShareIntake(),
+        pgnShare = pgnShare ?? FakePgnShare() {
     games = InMemoryGameRepository(store);
     cache = InMemoryLlmCacheRepository(store);
     analyses = analysesBuilder?.call(store) ?? InMemoryAnalysisRepository(store);
@@ -81,6 +127,15 @@ class TestEnv {
   final FilePickerService picker;
   final OpeningBook book;
 
+  /// The lichess / chess.com clients of the app under test (default: always
+  /// offline, so no test touches a network).
+  final OnlineGamesClient lichess;
+  final OnlineGamesClient chessCom;
+
+  /// The share / open-with intake and the share sheet of the app under test.
+  final FakeShareIntake intake;
+  final FakePgnShare pgnShare;
+
   /// Creates the engine of the app under test (default: a fake that answers
   /// every search with a trivial line).
   final EngineDriverFactory driverFactory;
@@ -95,6 +150,10 @@ class TestEnv {
         secretStoreProvider.overrideWithValue(secrets),
         llmClientProvider.overrideWithValue(llm),
         filePickerServiceProvider.overrideWithValue(picker),
+        lichessClientProvider.overrideWithValue(lichess),
+        chessComClientProvider.overrideWithValue(chessCom),
+        shareIntakeServiceProvider.overrideWithValue(intake),
+        pgnShareServiceProvider.overrideWithValue(pgnShare),
         openingBookProvider.overrideWith((ref) => book),
         nowMsProvider.overrideWithValue(() => clock++),
         engineDriverFactoryProvider.overrideWithValue(driverFactory),

@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../l10n/app_localizations.dart';
 import '../../platform/file_picker_service.dart';
 import 'import_preview_screen.dart';
+import 'online_import_screen.dart';
 import 'paste_import_screen.dart';
 import 'pgn_issue_text.dart';
 
@@ -25,6 +26,12 @@ class ImportSheet extends ConsumerWidget {
     final navigator = Navigator.of(context);
     navigator.pop();
     navigator.push(MaterialPageRoute<void>(builder: (_) => const PasteImportScreen()));
+  }
+
+  void _online(BuildContext context, OnlineSource source) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(MaterialPageRoute<void>(builder: (_) => OnlineImportScreen(source: source)));
   }
 
   Future<void> _openFile(BuildContext context, WidgetRef ref) async {
@@ -78,21 +85,25 @@ class ImportSheet extends ConsumerWidget {
           onTap: onTap,
         );
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(l10n.importSheetTitle, style: Theme.of(context).textTheme.titleLarge),
+      // Scrollable: with large text on a small phone the four rows are taller
+      // than the sheet's maximum height.
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(l10n.importSheetTitle, style: Theme.of(context).textTheme.titleLarge),
+              ),
             ),
-          ),
-          row(Icons.content_paste, l10n.importPastePgn, onTap: () => _paste(context)),
-          row(Icons.folder_open, l10n.importOpenFile, onTap: () => _openFile(context, ref)),
-          row(Icons.public, l10n.importFromLichess, subtitle: l10n.importComingSoon),
-          row(Icons.public, l10n.importFromChessCom, subtitle: l10n.importComingSoon),
-        ],
+            row(Icons.content_paste, l10n.importPastePgn, onTap: () => _paste(context)),
+            row(Icons.folder_open, l10n.importOpenFile, onTap: () => _openFile(context, ref)),
+            row(Icons.public, l10n.importFromLichess, onTap: () => _online(context, OnlineSource.lichess)),
+            row(Icons.public, l10n.importFromChessCom, onTap: () => _online(context, OnlineSource.chesscom)),
+          ],
+        ),
       ),
     );
   }
