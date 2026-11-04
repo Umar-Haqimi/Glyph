@@ -1,0 +1,81 @@
+# Proposed dependency blocks, resolved AND built in the M0 probe
+# (Flutter 3.47.9 / Dart 3.13.7, `flutter build apk --release --split-per-abi` OK, API 36 x86_64 emulator run OK).
+# See docs/m0/libraries.md for rationale. Pin exact versions via pubspec.lock; carets below are the resolved lines.
+
+# ---------------------------------------------------------------------------
+# Workspace root pubspec.yaml (repo root)
+# ---------------------------------------------------------------------------
+# name: glyph_workspace
+# publish_to: none
+# environment:
+#   sdk: ^3.13.0
+# workspace:
+#   - packages/glyph_core
+#   - app
+#
+# # sqlite3 3.x downloads a prebuilt libsqlite3 via build hooks. Host tests on Linux may use the
+# # system library (offline); Android keeps the downloaded one. User-defines are read from the
+# # workspace root only.
+# hooks:
+#   user_defines:
+#     sqlite3:
+#       source:
+#         linux: system
+#         default: sqlite3
+
+# ---------------------------------------------------------------------------
+# packages/glyph_core/pubspec.yaml  (pure Dart, no Flutter)
+# ---------------------------------------------------------------------------
+glyph_core:
+  environment:
+    sdk: ^3.13.0
+  dependencies:
+    dartchess: ^0.14.0          # 0.14.0, GPL-3.0 (same version chessground needs)
+    sqlite3: ^3.8.0             # 3.8.0, MIT. Do NOT add sqlite3_flutter_libs (obsolete shim)
+    crypto: ^3.0.8              # 3.0.8, BSD-3
+    http: ^1.6.0                # 1.6.0, BSD-3 (LlmClient/Lichess/ChessCom clients; MockClient in tests)
+  dev_dependencies:
+    test: ^1.33.0
+
+# ---------------------------------------------------------------------------
+# app/pubspec.yaml
+# ---------------------------------------------------------------------------
+app:
+  environment:
+    sdk: ^3.13.0
+    flutter: ">=3.47.0"
+  dependencies:
+    flutter:
+      sdk: flutter
+    flutter_localizations:
+      sdk: flutter
+    intl: any                   # 0.20.3
+    glyph_core:
+      path: ../packages/glyph_core   # (or workspace resolution)
+    material_ui: ^1.10.0        # 1.10.0 BSD-3; import package:material_ui/material_ui.dart (NOT flutter/material.dart)
+    chessground:                # 11.0.0 GPL-3.0. Vendored+trimmed copy (non-free piece sets removed), see libraries.md 2.5
+      path: ../third_party/chessground
+      # upstream equivalent: chessground: ^11.0.0
+    multistockfish: ^0.6.1      # 0.6.1 (+ _light 0.1.0, _chess 0.6.0, _variant 0.4.0), GPL-3.0
+    flutter_riverpod: ^3.4.3    # 3.4.3 MIT
+    flutter_secure_storage: ^11.2.0   # 11.2.0 BSD-3, default AndroidOptions()
+    receive_sharing_intent: ^1.9.0    # 1.9.0 Apache-2.0. NOT RECOMMENDED: needs compileSdk 37, uncapped copy to cache.
+                                      # Prefer the Kotlin MethodChannel (libraries.md section 5); delete this line then.
+    file_picker: ^13.3.2        # 13.3.2 MIT (adds only <queries>, no permissions)
+    dynamic_color: ^2.1.0       # 2.1.0 Apache-2.0 (returns material_ui ColorScheme)
+    crypto: ^3.0.8
+    http: ^1.6.0
+    # sqlite3 comes via glyph_core. No sqlite3_flutter_libs.
+  dev_dependencies:
+    flutter_test:
+      sdk: flutter
+    flutter_lints: ^6.0.0
+  flutter:
+    generate: true              # gen-l10n; l10n.yaml: arb-dir lib/l10n, output-dir lib/l10n, nullable-getter false
+
+# ---------------------------------------------------------------------------
+# android/ settings that were required to build
+# ---------------------------------------------------------------------------
+# app/android/app/build.gradle.kts : minSdk = 26 ; compileSdk = 37 (only if receive_sharing_intent is kept; else flutter.compileSdkVersion = 36)
+# app/android/gradle.properties    : android.suppressUnsupportedCompileSdk=37   (only with compileSdk 37)
+# ndkVersion = flutter.ndkVersion  (28.2.13676358) ; CMake 3.22.1 (auto-installed) ; AGP 9.1.0 ; Gradle 9.3.1 ; Kotlin 2.4.0

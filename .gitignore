@@ -1,0 +1,10 @@
+*.iml
+.gradle/
+local.properties
+build/
+.dart_tool/
+.idea/
+key.properties
+*.jks
+*.keystore
+.DS_Store
