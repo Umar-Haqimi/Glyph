@@ -1,0 +1,20 @@
+name: chessground
+description: Vendored copy of chessground 11.0.0 (lichess.org, GPL-3.0) with only free-licensed assets. See docs/DECISIONS.md.
+version: 11.0.0
+repository: https://github.com/lichess-org/flutter-chessground
+publish_to: none
+
+environment:
+  sdk: '>=3.7.0 <4.0.0'
+  flutter: ">=3.29.0"
+
+dependencies:
+  dartchess: ^0.14.0
+  flutter:
+    sdk: flutter
+  meta: ^1.18.0
+
+flutter:
+  assets:
+    - assets/piece_sets/cburnett/
+    - assets/boards/

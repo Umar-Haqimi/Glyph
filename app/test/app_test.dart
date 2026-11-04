@@ -27,14 +27,20 @@ void main() {
     expect(find.text(_l10n.importFromChessCom), findsOneWidget);
   });
 
-  testWidgets('board -> report and explain placeholders', (tester) async {
-    await _pump(tester);
-    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(Routes.board);
+  testWidgets('library -> board; Explain placeholder sheet and Report are reachable', (tester) async {
+    final env = TestEnv();
+    await env.seed(white: 'Alice', black: 'Bob');
+    await env.pump(tester);
+    await tester.tap(find.text(_l10n.libraryGameTitle('Alice (1500)', 'Bob')));
     await tester.pumpAndSettle();
-    expect(find.text(_l10n.boardTitle), findsOneWidget);
-    expect(find.text(_l10n.placeholderComingSoon), findsOneWidget);
+    expect(find.text(_l10n.boardTitleGame('Alice', 'Bob')), findsOneWidget);
+    expect(find.text(_l10n.placeholderComingSoon), findsNothing);
 
-    await tester.tap(find.text(_l10n.boardExplain));
+    // Nothing to explain at the start position; step to the first move.
+    expect(find.byKey(const Key('explain-button')), findsNothing);
+    await tester.tap(find.byKey(const Key('nav-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('explain-button')));
     await tester.pumpAndSettle();
     expect(
       find.descendant(
@@ -46,9 +52,17 @@ void main() {
     await tester.tapAt(const Offset(10, 10)); // dismiss the sheet via the barrier
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(_l10n.boardReport));
+    await tester.tap(find.byKey(const Key('open-report')));
     await tester.pumpAndSettle();
     expect(find.text(_l10n.reportTitle), findsOneWidget);
+  });
+
+  testWidgets('the board route without a game says so', (tester) async {
+    await _pump(tester);
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(Routes.board);
+    await tester.pumpAndSettle();
+    expect(find.text(_l10n.boardTitle), findsOneWidget);
+    expect(find.text(_l10n.boardNoGame), findsOneWidget);
   });
 
   testWidgets('settings -> about, and the theme mode setting works', (tester) async {

@@ -21,7 +21,7 @@ abstract final class Routes {
     final WidgetBuilder builder = switch (settings.name) {
       library => (_) => const LibraryScreen(),
       board => (_) => BoardScreen(gameId: settings.arguments as int?),
-      report => (_) => const ReportScreen(),
+      report => (_) => ReportScreen(gameId: settings.arguments as int?),
       Routes.settings => (_) => const SettingsScreen(),
       about => (_) => const AboutScreen(),
       _ => (_) => const LibraryScreen(),
