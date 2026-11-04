@@ -211,6 +211,39 @@ void contract(String name, Repos Function() create) {
       expect(labels.first.epLoss, isNull);
     });
 
+    test('saveReview: guarded atomic write of labels + accuracies only', () async {
+      final id = (await r.games.save(newGame())).id;
+      final label = MoveLabelRecord(gameId: id, ply: 1, label: MoveLabel.best);
+      AnalysisRecord row(AnalysisStatus s, int at) => AnalysisRecord(
+          gameId: id, engine: 'e', depth: 12, multipv: 2, status: s, completedPlies: 3, updatedAt: at);
+
+      expect(
+        await r.analyses.saveReview(id, expectedUpdatedAt: 5, labels: [label], whiteAccuracy: 90, blackAccuracy: 80),
+        isFalse,
+        reason: 'no row',
+      );
+      expect(await r.analyses.get(id), isNull, reason: 'a missing row is not resurrected');
+
+      await r.analyses.upsert(row(AnalysisStatus.completed, 5));
+      expect(await r.analyses.saveReview(id, expectedUpdatedAt: 5, labels: [label], whiteAccuracy: 90, blackAccuracy: 80), isTrue);
+      var a = (await r.analyses.get(id))!;
+      expect((a.whiteAccuracy, a.blackAccuracy, a.status, a.updatedAt, a.completedPlies, a.engine), (90, 80, AnalysisStatus.completed, 5, 3, 'e'));
+      expect(await r.analyses.labels(id), hasLength(1));
+
+      // Stale snapshot (updated_at moved on): nothing is written.
+      await r.analyses.upsert(row(AnalysisStatus.completed, 6));
+      final other = MoveLabelRecord(gameId: id, ply: 2, label: MoveLabel.blunder);
+      expect(await r.analyses.saveReview(id, expectedUpdatedAt: 5, labels: [other], whiteAccuracy: 1, blackAccuracy: 2), isFalse);
+      expect((await r.analyses.labels(id)).map((l) => l.ply), [1]);
+      expect((await r.analyses.get(id))!.whiteAccuracy, isNull, reason: 'the upsert replaced the row; the stale review changed nothing');
+
+      // Not completed any more: nothing is written.
+      await r.analyses.upsert(row(AnalysisStatus.running, 6));
+      expect(await r.analyses.saveReview(id, expectedUpdatedAt: 6, labels: [other], whiteAccuracy: 1, blackAccuracy: 2), isFalse);
+      expect((await r.analyses.get(id))!.status, AnalysisStatus.running);
+      expect((await r.analyses.labels(id)).map((l) => l.ply), [1]);
+    });
+
     test('delete cascades to analysis, lines and labels (only for that game)', () async {
       final a = (await r.games.save(newGame())).id;
       final b = (await r.games.save(newGame())).id;

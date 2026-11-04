@@ -47,6 +47,22 @@ abstract interface class AnalysisRepository {
 
   Future<void> putLabels(int gameId, List<MoveLabelRecord> labels);
 
+  /// Stores a finished review atomically: **only if** the analysis row is
+  /// still `completed` with `updated_at == expectedUpdatedAt` (the snapshot
+  /// the review was computed from), writes [labels] and sets
+  /// `white_accuracy` / `black_accuracy` (nothing else on the row) in one
+  /// transaction and returns true. Otherwise (row cleared, restarted, resumed
+  /// or re-completed since) writes nothing and returns false, so a stale
+  /// review can neither overwrite a running analysis nor resurrect a
+  /// `completed` row.
+  Future<bool> saveReview(
+    int gameId, {
+    required int expectedUpdatedAt,
+    required List<MoveLabelRecord> labels,
+    double? whiteAccuracy,
+    double? blackAccuracy,
+  });
+
   /// All labels of a game ordered by ply.
   Future<List<MoveLabelRecord>> labels(int gameId);
 

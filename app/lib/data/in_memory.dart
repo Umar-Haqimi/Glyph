@@ -137,6 +137,33 @@ class InMemoryAnalysisRepository implements AnalysisRepository {
   }
 
   @override
+  Future<bool> saveReview(
+    int gameId, {
+    required int expectedUpdatedAt,
+    required List<MoveLabelRecord> labels,
+    double? whiteAccuracy,
+    double? blackAccuracy,
+  }) async {
+    final a = store.analyses[gameId];
+    if (a == null || a.status != AnalysisStatus.completed || a.updatedAt != expectedUpdatedAt) return false;
+    for (final l in labels) {
+      store.labels[(gameId, l.ply)] = l;
+    }
+    store.analyses[gameId] = AnalysisRecord(
+      gameId: a.gameId,
+      engine: a.engine,
+      depth: a.depth,
+      multipv: a.multipv,
+      status: a.status,
+      completedPlies: a.completedPlies,
+      whiteAccuracy: whiteAccuracy,
+      blackAccuracy: blackAccuracy,
+      updatedAt: a.updatedAt,
+    );
+    return true;
+  }
+
+  @override
   Future<List<MoveLabelRecord>> labels(int gameId) async {
     final out = [for (final e in store.labels.entries) if (e.key.$1 == gameId) e.value];
     out.sort((a, b) => a.ply.compareTo(b.ply));

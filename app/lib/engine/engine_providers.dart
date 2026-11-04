@@ -9,6 +9,7 @@ import '../data/models.dart';
 import '../data/providers.dart';
 import '../features/library/library_controller.dart';
 import '../features/settings/engine_settings.dart';
+import '../platform/app_log.dart';
 import 'engine_service.dart';
 import 'multistockfish_driver.dart';
 import 'repository_analysis_store.dart';
@@ -137,7 +138,12 @@ class AnalysisJobNotifier extends Notifier<AnalysisJobState> {
     if (id != null && s.isFinished) {
       if (s is AnalysisCompleted) {
         // Label the moves and compute accuracy before telling the UI.
-        unawaited(_review.classify(id).then((_) {}, onError: (Object _) {}).whenComplete(() => _refresh(id)));
+        unawaited(
+          _review
+              .classify(id)
+              .then((_) {}, onError: (Object e) => AppLog.warning('Classifying a finished analysis failed', e))
+              .whenComplete(() => _refresh(id)),
+        );
       } else {
         _refresh(id);
       }

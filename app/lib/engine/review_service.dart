@@ -2,6 +2,7 @@ import 'package:glyph_core/glyph_core.dart';
 
 import '../data/models.dart';
 import '../data/repositories.dart';
+import '../platform/app_log.dart';
 
 /// Turns a finished analysis into move labels and accuracy (SPEC F5, F6):
 /// reads the stored engine lines, runs `reviewGame` from `glyph_core` and
@@ -63,34 +64,30 @@ class ReviewService {
 
     final review = reviewGame(game, lines, book: await book(), config: config);
 
-    // Re-read: a re-analysis may have started (and cleared the lines) while
-    // the review ran; never write labels over a running analysis.
-    final current = await analyses.get(gameId);
-    if (current == null || current.status != AnalysisStatus.completed) return null;
-    await analyses.putLabels(gameId, [
-      for (final m in review.moves)
-        if (m != null)
-          MoveLabelRecord(
-            gameId: gameId,
-            ply: m.ply,
-            label: m.label,
-            epLoss: m.epLoss,
-            winBefore: m.winBefore,
-            winAfter: m.winAfter,
-            bestUci: m.bestUci,
-          ),
-    ]);
-    await analyses.upsert(AnalysisRecord(
-      gameId: gameId,
-      engine: current.engine,
-      depth: current.depth,
-      multipv: current.multipv,
-      status: current.status,
-      completedPlies: current.completedPlies,
+    // One transaction, guarded by the snapshot the review was computed from:
+    // if a re-analysis cleared / restarted / re-completed the row meanwhile,
+    // nothing is written (no labels over a running analysis, no stale
+    // `completed` row resurrected).
+    final saved = await analyses.saveReview(
+      gameId,
+      expectedUpdatedAt: analysis.updatedAt,
+      labels: [
+        for (final m in review.moves)
+          if (m != null)
+            MoveLabelRecord(
+              gameId: gameId,
+              ply: m.ply,
+              label: m.label,
+              epLoss: m.epLoss,
+              winBefore: m.winBefore,
+              winAfter: m.winAfter,
+              bestUci: m.bestUci,
+            ),
+      ],
       whiteAccuracy: review.accuracy.white,
       blackAccuracy: review.accuracy.black,
-      updatedAt: current.updatedAt,
-    ));
+    );
+    if (!saved) return null;
     return review;
   }
 
@@ -111,16 +108,34 @@ class ReviewService {
 
   /// When the stored `classifier_version` differs from [config]'s, re-labels
   /// every completed analysis and records the new version. Returns the number
-  /// of games re-labelled.
+  /// of games re-labelled. The new version is recorded only when no game
+  /// failed to re-label (an exception, or a game that is completed but could
+  /// not be classified for a reason other than being restarted meanwhile), so
+  /// the next start retries; a game whose analysis was restarted during the
+  /// pass is not a failure (it gets labelled when it completes again).
   Future<int> reclassifyIfStale() async {
     final stored = await settings.get(SettingsKeys.classifierVersion);
     final current = '${config.version}';
     if (stored == current) return 0;
     var n = 0;
+    var failed = false;
     for (final g in await games.list()) {
-      if (g.analysisStatus == AnalysisStatus.completed && await classify(g.id) != null) n++;
+      if (g.analysisStatus != AnalysisStatus.completed) continue;
+      try {
+        if (await classify(g.id) != null) {
+          n++;
+        } else {
+          final now = await analyses.get(g.id);
+          // Still completed but nothing was written: unreadable PGN or
+          // missing lines. Retry on the next start.
+          if (now != null && now.status == AnalysisStatus.completed) failed = true;
+        }
+      } on Object catch (e) {
+        failed = true;
+        AppLog.warning('Re-classifying a game failed', e); // type only, never game data
+      }
     }
-    await settings.set(SettingsKeys.classifierVersion, current);
+    if (!failed) await settings.set(SettingsKeys.classifierVersion, current);
     return n;
   }
 }

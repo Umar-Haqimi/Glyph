@@ -83,6 +83,65 @@ void main() {
     });
   });
 
+  group('See.evaluate (pins)', () {
+    const pinned = '2k5/8/4p3/3n4/6B1/8/8/K2R4 w - - 0 1';
+
+    test('an absolutely pinned pawn cannot recapture: Rxd5 wins the knight', () {
+      expect(see(pinned, 'd1d5'), 3);
+      expect(sac(pinned, 'd1d5'), isFalse);
+    });
+
+    test('colour symmetry: the mirrored position gives the same result', () {
+      expect(see('k2r4/8/8/6b1/3N4/4P3/8/2K5 b - - 0 1', 'd8d4'), 3);
+      expect(sac('k2r4/8/8/6b1/3N4/4P3/8/2K5 b - - 0 1', 'd8d4'), isFalse);
+    });
+
+    test('without the pinning bishop the pawn recaptures: 3 - 5 = -2', () {
+      expect(see('2k5/8/4p3/3n4/8/8/8/K2R4 w - - 0 1', 'd1d5'), -2);
+      expect(sac('2k5/8/4p3/3n4/8/8/8/K2R4 w - - 0 1', 'd1d5'), isTrue);
+    });
+
+    test('a pinned piece may still capture the pinner along the pin line', () {
+      // Rxa3 pins the a5 rook against the a8 king, but Rxa3 is along the pin: 1 - 5.
+      expect(see('k7/8/8/r7/8/pR6/8/6K1 w - - 0 1', 'b3a3'), -4);
+    });
+
+    test('a pinned defender off the pin line does not defend (second step of the exchange)', () {
+      // Black Rf7 is pinned to Kg8 by Bc4 and cannot retake on f5: Nxf5 wins the pawn.
+      expect(see('6k1/5r2/8/5p2/2BN4/8/8/6K1 w - - 0 1', 'd4f5'), 1);
+      // Without the bishop the rook recaptures: 1 - 3.
+      expect(see('6k1/5r2/8/5p2/3N4/8/8/6K1 w - - 0 1', 'd4f5'), -2);
+    });
+  });
+
+  group('See promotions (quiet)', () {
+    const quiet = 'r5k1/3P4/8/8/8/8/6PP/6K1 w - - 0 1';
+
+    test('a quiet promotion that is recaptured costs the pawn only', () {
+      expect(see(quiet, 'd7d8q'), -1);
+      expect(sac(quiet, 'd7d8q'), isFalse);
+    });
+
+    test('mirrored (Black promotes)', () {
+      const mirrored = '6k1/6pp/8/8/8/8/3p4/R5K1 b - - 0 1';
+      expect(see(mirrored, 'd2d1q'), -1);
+      expect(sac(mirrored, 'd2d1q'), isFalse);
+    });
+
+    test('a capturing promotion still counts as a capture', () {
+      expect(see('2r3k1/3P4/8/8/8/8/6PP/6K1 w - - 0 1', 'd7c8q'), 5 + 8);
+    });
+
+    test('a promotion that leaves a queen hanging elsewhere is still a sacrifice', () {
+      // a8=N gains only 2, while the a1 queen can be taken by the h8 bishop.
+      const fen = '4k2b/P7/8/8/8/8/8/Q3K3 w - - 0 1';
+      final p = pos(fen);
+      expect(See.isSacrifice(p, NormalMove(from: Square.fromName('a7'), to: Square.fromName('a8'), promotion: Role.knight)), isTrue);
+      expect(See.isSacrifice(p, NormalMove(from: Square.fromName('a7'), to: Square.fromName('a8'), promotion: Role.queen)), isFalse,
+          reason: 'the promotion gain (8) exceeds the queen at risk (9) by less than 2');
+    });
+  });
+
   group('See.isSacrifice (SPEC 2.1 Brilliant 2, trap 6)', () {
     test('Greek gift Bxh7+ is a sacrifice', () {
       expect(sac('r1bq1rk1/pppn1ppp/4p3/3pP3/1b1P4/2NB1N2/PPP2PPP/R1BQK2R w KQ - 0 1', 'd3h7'), isTrue);

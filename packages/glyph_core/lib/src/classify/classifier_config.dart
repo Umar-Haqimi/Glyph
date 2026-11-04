@@ -9,7 +9,7 @@
 /// from the stored engine lines when it changes (SPEC 5.4).
 class ClassifierConfig {
   const ClassifierConfig({
-    this.version = 1,
+    this.version = 2,
     this.excellentMaxLoss = 0.02,
     this.goodMaxLoss = 0.05,
     this.inaccuracyMaxLoss = 0.10,

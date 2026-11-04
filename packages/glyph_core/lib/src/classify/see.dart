@@ -10,9 +10,16 @@ import 'package:dartchess/dartchess.dart';
 /// stop capturing when continuing would lose material (the usual swap-list
 /// minimax).
 ///
-/// Approximations, as in most engines' SEE: pins are ignored after the first
-/// capture, and a pawn that recaptures on the last rank is valued as a queen.
-/// A king only recaptures when the square is no longer attacked.
+/// Legality: a piece may only join the exchange if capturing on the target
+/// square does not leave its own king attacked (absolute pins, and moves that
+/// ignore a check, are rejected at every step of the exchange; the check is
+/// made on the occupancy of that moment, so x-ray pins that appear as pieces
+/// leave are honoured too). A king only recaptures when the square is no
+/// longer attacked.
+///
+/// Approximations: a pawn that recaptures on the last rank is valued as a
+/// queen, and only the capture on the target square is tested for legality
+/// (en passant discovered checks along the rank are not).
 abstract final class See {
   static const int kingValue = 100;
 
@@ -63,9 +70,9 @@ abstract final class See {
     final gain = <int>[captured];
     var side = mover.color.opposite;
     while (true) {
-      final attackers = board.attacksTo(to, side, occupied: occupied).intersect(occupied);
-      if (attackers.isEmpty) break;
-      final (sq, role) = _leastValuable(board, attackers);
+      final attacker = _leastValuableLegal(board, to, side, occupied);
+      if (attacker == null) break;
+      final (sq, role) = attacker;
       if (role == Role.king &&
           board.attacksTo(to, side.opposite, occupied: occupied.withoutSquare(sq)).intersect(occupied).isNotEmpty) {
         break; // the king may not capture into a defended square
@@ -88,12 +95,25 @@ abstract final class See {
     return gain.first;
   }
 
-  static (Square, Role) _leastValuable(Board board, SquareSet attackers) {
+  /// The least valuable piece of [side] that can legally capture on [to] with
+  /// the given [occupied] set (pins and checks respected), or null.
+  static (Square, Role)? _leastValuableLegal(Board board, Square to, Side side, SquareSet occupied) {
+    final attackers = board.attacksTo(to, side, occupied: occupied).intersect(occupied);
+    if (attackers.isEmpty) return null;
+    final king = board.kingOf(side);
     for (final role in const [Role.pawn, Role.knight, Role.bishop, Role.rook, Role.queen, Role.king]) {
-      final s = attackers.intersect(board.byRole(role));
-      if (s.isNotEmpty) return (s.first!, role);
+      for (final sq in attackers.intersect(board.byRole(role)).squares) {
+        if (role == Role.king) return (sq, role); // its own safety is checked by the caller
+        if (king != null) {
+          // The piece leaves [sq] and lands on [to] (the piece it takes is gone).
+          final occ = occupied.withoutSquare(sq);
+          final checkers = board.attacksTo(king, side.opposite, occupied: occ).intersect(occ).withoutSquare(to);
+          if (checkers.isNotEmpty) continue; // pinned (or the king stays in check)
+        }
+        return (sq, role);
+      }
     }
-    throw StateError('unreachable');
+    return null;
   }
 
   /// The material the move captures (0 for quiet moves and castling), in
@@ -133,7 +153,8 @@ abstract final class See {
   ///   (`evaluate <= -threshold`, e.g. Bxh7+ Kxh7); **or**
   /// * after the move, the opponent has a legal capture of one of the mover's
   ///   pieces that nets the opponent at least [threshold] more than the move
-  ///   itself captured (`evaluate(after, capture) - capturedValue >= threshold`;
+  ///   itself gained (captured material plus the promotion gain;
+  ///   `evaluate(after, capture) - gained >= threshold`;
   ///   for a quiet move that is exactly SPEC's "SEE gain >= 2").
   ///
   /// For a capture, opponent recaptures on the same square are left to the
@@ -143,10 +164,14 @@ abstract final class See {
   static bool isSacrifice(Position before, NormalMove move, {int threshold = 2}) {
     final captured = capturedValue(before, move);
     if (captured > 0 && evaluate(before, move) <= -threshold) return true;
+    // A promotion gains material too (the pawn becomes a bigger piece), so a
+    // quiet promotion that is recaptured gave up a pawn, not a queen.
+    final promotion = move.promotion;
+    final gained = captured + (promotion == null ? 0 : value(promotion) - 1);
     final after = before.play(move);
     for (final c in legalCaptures(after)) {
       if (captured > 0 && c.to == move.to) continue;
-      if (evaluate(after, c) - captured >= threshold) return true;
+      if (evaluate(after, c) - gained >= threshold) return true;
     }
     return false;
   }

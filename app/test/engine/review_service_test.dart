@@ -8,6 +8,7 @@ import 'package:glyph/data/repositories.dart';
 import 'package:glyph/data/sqlite_repositories.dart';
 import 'package:glyph/engine/repository_analysis_store.dart';
 import 'package:glyph/engine/review_service.dart';
+import 'package:glyph/platform/app_log.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:glyph_core/testing.dart';
 
@@ -143,6 +144,77 @@ void main() {
         expect(await service.ensureClassified(999), isFalse);
       });
 
+      test('a restart during the review is not overwritten by a stale completed snapshot', () async {
+        final env = make();
+        final id = await env.analysed('p0_blunder_white');
+        final before = (await env.analyses.get(id))!;
+        // The restart path (clear, then upsert running) lands while the review
+        // is computing (the book is awaited between the snapshot and the write).
+        final service = ReviewService(
+          games: env.games,
+          analyses: env.analyses,
+          settings: env.settings,
+          book: () async {
+            await env.analyses.clear(id);
+            await env.analyses.upsert(AnalysisRecord(
+                gameId: id, engine: before.engine, depth: before.depth, multipv: before.multipv, status: AnalysisStatus.running, updatedAt: before.updatedAt + 1));
+            return book();
+          },
+        );
+        expect(await service.classify(id), isNull);
+        final a = (await env.analyses.get(id))!;
+        expect(a.status, AnalysisStatus.running, reason: 'not resurrected as completed');
+        expect(a.whiteAccuracy, isNull);
+        expect(await env.analyses.labels(id), isEmpty);
+      });
+
+      test('a restart that completed again with newer data is not overwritten by the older review', () async {
+        final env = make();
+        final id = await env.analysed('p0_blunder_white');
+        final before = (await env.analyses.get(id))!;
+        final service = ReviewService(
+          games: env.games,
+          analyses: env.analyses,
+          settings: env.settings,
+          book: () async {
+            await env.analyses.upsert(AnalysisRecord(
+                gameId: id, engine: before.engine, depth: before.depth, multipv: before.multipv, status: AnalysisStatus.completed, updatedAt: before.updatedAt + 5));
+            return book();
+          },
+        );
+        expect(await service.classify(id), isNull, reason: 'the newer completion will classify itself');
+        expect(await env.analyses.labels(id), isEmpty);
+        expect((await env.analyses.get(id))!.whiteAccuracy, isNull);
+      });
+
+      test('reclassifyIfStale keeps the old classifier_version when a game fails and logs only the error type', () async {
+        final env = make();
+        final id = await env.analysed('p0_blunder_white');
+        final lines = <String>[];
+        final saved = AppLog.sink;
+        AppLog.sink = lines.add;
+        addTearDown(() => AppLog.sink = saved);
+        final broken = ReviewService(
+          games: env.games,
+          analyses: env.analyses,
+          settings: env.settings,
+          book: () async => throw StateError('secret pgn text'),
+        );
+        expect(await broken.reclassifyIfStale(), 0);
+        expect(await env.settings.get(SettingsKeys.classifierVersion), isNull, reason: 'retry on the next start');
+        expect(lines, hasLength(1));
+        expect(lines.single, contains('StateError'));
+        expect(lines.single, isNot(contains('secret')));
+
+        // A completed game that cannot be classified (no stored lines) also blocks the version.
+        final noLines = (await env.games.save(const NewGame(source: GameSource.paste, pgn: '1. e4 e5 *', plyCount: 2, importedAt: 1))).id;
+        await env.analyses.upsert(AnalysisRecord(
+            gameId: noLines, engine: 'x', depth: 16, multipv: 2, status: AnalysisStatus.completed, completedPlies: 3, updatedAt: 1));
+        expect(await env.review().reclassifyIfStale(), 1);
+        expect(await env.settings.get(SettingsKeys.classifierVersion), isNull);
+        expect(await env.analyses.labels(id), hasLength(7));
+      });
+
       test('reclassifyIfStale re-labels completed games once per classifier version', () async {
         final env = make();
         final id = await env.analysed('p0_blunder_white');
@@ -158,11 +230,11 @@ void main() {
           analyses: env.analyses,
           settings: env.settings,
           book: () async => OpeningBook(const {}),
-          config: const ClassifierConfig(version: 2),
+          config: const ClassifierConfig(version: 3),
         );
         expect(await strict.reclassifyIfStale(), 1);
         expect((await env.analyses.labels(id)).first.label, isNot(MoveLabel.book), reason: 'no book in this one');
-        expect(await env.settings.get(SettingsKeys.classifierVersion), '2');
+        expect(await env.settings.get(SettingsKeys.classifierVersion), '3');
       });
     });
   }

@@ -226,6 +226,36 @@ VALUES (?, ?, ?, ?, ?, ?, ?)''');
   }
 
   @override
+  Future<bool> saveReview(
+    int gameId, {
+    required int expectedUpdatedAt,
+    required List<MoveLabelRecord> labels,
+    double? whiteAccuracy,
+    double? blackAccuracy,
+  }) async =>
+      _db.transaction(() {
+        // The guard is the first statement: if it matches nothing, no label is written.
+        _db.raw.execute(
+          '''
+UPDATE analyses SET white_accuracy = ?, black_accuracy = ?
+WHERE game_id = ? AND status = 'completed' AND updated_at = ?''',
+          [whiteAccuracy, blackAccuracy, gameId, expectedUpdatedAt],
+        );
+        if (_db.raw.updatedRows == 0) return false;
+        final stmt = _db.raw.prepare('''
+INSERT OR REPLACE INTO move_labels (game_id, ply, label, ep_loss, win_before, win_after, best_uci)
+VALUES (?, ?, ?, ?, ?, ?, ?)''');
+        try {
+          for (final l in labels) {
+            stmt.execute([gameId, l.ply, l.label.name, l.epLoss, l.winBefore, l.winAfter, l.bestUci]);
+          }
+        } finally {
+          stmt.close();
+        }
+        return true;
+      });
+
+  @override
   Future<List<MoveLabelRecord>> labels(int gameId) async => [
         for (final r in _db.raw.select('SELECT * FROM move_labels WHERE game_id = ? ORDER BY ply', [gameId]))
           MoveLabelRecord(
