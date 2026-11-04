@@ -1,0 +1,20 @@
+name: glyph_workspace
+description: Glyph monorepo (Dart pub workspace).
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - packages/glyph_core
+  - app
+
+# sqlite3 3.x downloads a prebuilt libsqlite3 through build hooks (used from M2). Host tests on
+# Linux may use the system library (works offline); Android keeps the downloaded one.
+# User-defines are only read from the workspace root.
+hooks:
+  user_defines:
+    sqlite3:
+      source:
+        linux: system
+        default: sqlite3

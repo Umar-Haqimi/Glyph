@@ -1,0 +1,5 @@
+package my.umarh.glyph
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

@@ -454,3 +454,11 @@ hooks:
 - Replace receive_sharing_intent with a Kotlin MethodChannel (M7). Vendor a trimmed set of free-licensed piece sets/boards (M5).
 - Always set UCI_Chess960=true when talking to the engine (dartchess castling is king-to-rook); convert via dartchess Move objects.
 - Existing Android Studio template project was replaced by the Flutter app (backup kept outside the repo).
+
+## M1 decisions
+- Dart pub workspace at the repo root; single `pubspec.lock` there (the banned-deps check scans every `pubspec.lock`). `flutter pub get` anywhere in the repo resolves the whole workspace.
+- Workspace constraint: `flutter_test` pins `test_api 0.7.12`, so `glyph_core` uses `test: ^1.25.0` (resolves to 1.31.1). Raise when Flutter's pin moves.
+- Routing: plain `Navigator` with named routes (`app/lib/routes.dart`), no routing package. Import and Explain are modal bottom sheets.
+- `check_permissions.sh` allowlist: `android.permission.INTERNET` plus the regex `^my\.umarh\.glyph\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$` (androidx.core, signature-level; M0 section 3.6). Anything else fails the check.
+- Release signing reads `android/key.properties` (keys `storeFile`, `storePassword`, `keyAlias`, `keyPassword`) or env `GLYPH_KEYSTORE_FILE`, `GLYPH_KEYSTORE_PASSWORD`, `GLYPH_KEY_ALIAS`, `GLYPH_KEY_PASSWORD`; without them the debug key signs (so CI builds pass; such APKs are not for distribution).
+- Badge colours are hand-tuned fixed palettes (not harmonized with the dynamic scheme) so the 4.5:1 glyph contrast stays guaranteed.

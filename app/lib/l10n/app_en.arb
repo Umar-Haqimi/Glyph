@@ -1,0 +1,56 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Glyph",
+  "@appTitle": { "description": "Application name" },
+
+  "placeholderComingSoon": "Coming in a later milestone.",
+  "@placeholderComingSoon": { "description": "Body text of screens that are not built yet" },
+
+  "libraryTitle": "Glyph",
+  "libraryEmptyTitle": "No games yet",
+  "libraryEmptyAction": "Import your first game",
+  "libraryImportFab": "Import",
+  "libraryOpenSampleBoard": "Open sample board",
+
+  "importSheetTitle": "Import a game",
+  "importPastePgn": "Paste PGN",
+  "importOpenFile": "Open file",
+  "importFromLichess": "From lichess",
+  "importFromChessCom": "From chess.com",
+
+  "boardTitle": "Board",
+  "boardKeyMoments": "Key moments",
+  "boardReport": "Report",
+  "boardExplain": "Explain",
+
+  "reportTitle": "Report",
+  "explainTitle": "Explain",
+
+  "settingsTitle": "Settings",
+  "settingsTooltip": "Settings",
+  "settingsAppearance": "Appearance",
+  "settingsThemeMode": "Theme",
+  "settingsThemeSystem": "System",
+  "settingsThemeLight": "Light",
+  "settingsThemeDark": "Dark",
+  "settingsDynamicColor": "Dynamic colour",
+  "settingsDynamicColorSubtitle": "Use your wallpaper colours on Android 12 and newer.",
+  "settingsAbout": "About",
+
+  "aboutTitle": "About",
+  "aboutLicenseNotice": "Glyph is free software, licensed under the GNU General Public License, version 3 or later.",
+  "aboutLicenses": "Open-source licences",
+
+  "labelBrilliant": "Brilliant",
+  "labelGreat": "Great",
+  "labelBest": "Best",
+  "labelExcellent": "Excellent",
+  "labelGood": "Good",
+  "labelBook": "Book",
+  "labelForced": "Forced",
+  "labelInaccuracy": "Inaccuracy",
+  "labelMistake": "Mistake",
+  "labelMiss": "Miss",
+  "labelBlunder": "Blunder"
+}
