@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two exclamation marks inside the 66 dp safe zone of a 108 dp adaptive icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- first bar: a tapered stroke, rounded at the top -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37,30 Q37,26 41,26 Q45,26 45,30 L44,58 Q44,60 41,60 Q38,60 38,58 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36.5,70 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <!-- second bar -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M63,30 Q63,26 67,26 Q71,26 71,30 L70,58 Q70,60 67,60 Q64,60 64,58 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62.5,70 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+</vector>

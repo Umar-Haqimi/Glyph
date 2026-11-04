@@ -123,6 +123,18 @@ class EngineService {
     }
   }
 
+  /// Cancels every job: the running one, the queued ones and a paused one
+  /// (Settings > Delete all data, before the games go away).
+  Future<void> cancelAll() async {
+    _queue.clear();
+    _pausedRequest = null;
+    _queueChanged();
+    if (_current != null) {
+      _dropCurrent = true;
+      await _pipeline.cancel();
+    }
+  }
+
   /// `AppLifecycleState.paused`: stop searching and release the engine.
   Future<void> onAppPaused() {
     _background = true;

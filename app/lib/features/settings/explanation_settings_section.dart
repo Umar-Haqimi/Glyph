@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../routes.dart';
+import '../../widgets/adaptive_segments.dart';
+import '../../widgets/section_header.dart';
 import 'explain_settings.dart';
 import 'llm_settings_screen.dart';
 
@@ -15,7 +17,6 @@ class ExplanationSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final settings = ref.watch(explainSettingsProvider).value;
     final notifier = ref.read(explainSettingsProvider.notifier);
     final s = settings ?? const ExplainSettings();
@@ -25,10 +26,7 @@ class ExplanationSettingsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(l10n.settingsExplanations, style: theme.textTheme.titleSmall),
-        ),
+        SectionHeader(l10n.settingsExplanations),
         ListTile(
           key: const Key('settings-llm'),
           title: Text(l10n.settingsLlmConnection),
@@ -46,28 +44,28 @@ class ExplanationSettingsSection extends ConsumerWidget {
         ListTile(title: Text(l10n.settingsTone)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SegmentedButton<ExplainTone>(
-            key: const Key('settings-tone'),
-            segments: [
-              ButtonSegment(value: ExplainTone.casual, label: Text(l10n.toneCasual)),
-              ButtonSegment(value: ExplainTone.coach, label: Text(l10n.toneCoach)),
+          child: AdaptiveSegments<ExplainTone>(
+            controlKey: const Key('settings-tone'),
+            options: [
+              (ExplainTone.casual, l10n.toneCasual),
+              (ExplainTone.coach, l10n.toneCoach),
             ],
-            selected: {s.tone},
-            onSelectionChanged: (v) => notifier.setTone(v.first),
+            selected: s.tone,
+            onChanged: notifier.setTone,
           ),
         ),
         ListTile(title: Text(l10n.settingsAudience)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SegmentedButton<ExplainAudience>(
-            key: const Key('settings-audience'),
-            segments: [
-              ButtonSegment(value: ExplainAudience.beginner, label: Text(l10n.audienceBeginner)),
-              ButtonSegment(value: ExplainAudience.club, label: Text(l10n.audienceClub)),
-              ButtonSegment(value: ExplainAudience.advanced, label: Text(l10n.audienceAdvanced)),
+          child: AdaptiveSegments<ExplainAudience>(
+            controlKey: const Key('settings-audience'),
+            options: [
+              (ExplainAudience.beginner, l10n.audienceBeginner),
+              (ExplainAudience.club, l10n.audienceClub),
+              (ExplainAudience.advanced, l10n.audienceAdvanced),
             ],
-            selected: {s.audience},
-            onSelectionChanged: (v) => notifier.setAudience(v.first),
+            selected: s.audience,
+            onChanged: notifier.setAudience,
           ),
         ),
         SwitchListTile(

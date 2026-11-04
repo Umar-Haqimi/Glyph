@@ -70,6 +70,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.byTooltip(_l10n.settingsTooltip));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text(_l10n.settingsThemeDark), 300, scrollable: find.byType(Scrollable).first);
     expect(find.text(_l10n.settingsAppearance), findsOneWidget);
 
     await tester.tap(find.text(_l10n.settingsThemeDark));
@@ -77,6 +78,7 @@ void main() {
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
 
+    await tester.scrollUntilVisible(find.text(_l10n.settingsAbout), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text(_l10n.settingsAbout));
     await tester.pumpAndSettle();
     expect(find.text(_l10n.aboutLicenseNotice), findsOneWidget);

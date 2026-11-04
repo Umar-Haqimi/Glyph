@@ -1,26 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// User choice of light / dark / follow-system. Persisted in a later milestone.
-class ThemeModeNotifier extends Notifier<ThemeMode> {
-  @override
-  ThemeMode build() => ThemeMode.system;
+import '../features/settings/appearance_settings.dart';
 
-  void set(ThemeMode mode) => state = mode;
-}
-
-final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
-  ThemeModeNotifier.new,
-);
+/// Light / dark / follow-system, from the stored appearance settings
+/// (`appearanceProvider` owns the choice and persists it).
+final themeModeProvider = Provider<ThemeMode>((ref) => ref.watch(appearanceProvider.select((a) => a.themeMode)));
 
 /// Whether to use the system (wallpaper) palette on Android 12+.
-class DynamicColorNotifier extends Notifier<bool> {
-  @override
-  bool build() => true;
-
-  void set(bool enabled) => state = enabled;
-}
-
-final dynamicColorProvider = NotifierProvider<DynamicColorNotifier, bool>(
-  DynamicColorNotifier.new,
-);
+final dynamicColorProvider = Provider<bool>((ref) => ref.watch(appearanceProvider.select((a) => a.dynamicColor)));

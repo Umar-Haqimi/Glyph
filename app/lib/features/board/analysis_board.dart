@@ -43,7 +43,7 @@ class BoardArrow {
 /// The view-only board of the analysis screen (SPEC section 4): last-move
 /// highlight, Glyph's own badge on the destination square of the current
 /// move, the best-move arrow, coordinates. Built on chessground's
-/// `StaticChessboard`; the free `cburnett` piece set only (SPEC trap 15).
+/// `StaticChessboard`; only the free piece sets and boards of `board_assets.dart` (SPEC trap 15).
 ///
 /// Pieces glide for one ply and jump when [animate] is false (SPEC section 4:
 /// "none when jumping more than 1 ply").
@@ -58,6 +58,8 @@ class AnalysisBoard extends StatelessWidget {
     this.arrow,
     this.animate = true,
     required this.semanticsLabel,
+    this.boardScheme = defaultBoardSchemeKey,
+    this.pieceSet = defaultPieceSetKey,
   });
 
   final double size;
@@ -71,6 +73,10 @@ class AnalysisBoard extends StatelessWidget {
   /// What a screen reader says for the whole board (position, last move,
   /// label, orientation).
   final String semanticsLabel;
+
+  /// Keys of the allow-lists in `board_assets.dart` (Settings > Appearance).
+  final String boardScheme;
+  final String pieceSet;
 
   @override
   Widget build(BuildContext context) {
@@ -96,8 +102,8 @@ class AnalysisBoard extends StatelessWidget {
         lastMove: lastMove,
         shapes: shapes,
         settings: StaticChessboardSettings(
-          colorScheme: defaultBoardColorScheme,
-          pieceAssets: boardPieceAssets,
+          colorScheme: boardSchemeFor(boardScheme),
+          pieceAssets: pieceAssetsFor(pieceSet),
           enableCoordinates: true,
           animationDuration: animate && !reduceMotion ? const Duration(milliseconds: 150) : Duration.zero,
         ),

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glyph's own launcher icon: two vector exclamation marks ("!!", the brilliant-move
+     annotation glyph) on a green field. minSdk is 26, so an adaptive icon is always
+     available and no PNG fallback exists. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

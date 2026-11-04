@@ -1,6 +1,7 @@
 import 'package:glyph_core/glyph_core.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../errors/recovery.dart';
 
 /// The copy for each failure kind (SPEC 4 "ExplainRequest", one string each).
 /// [model] fills "Model '{model}' isn't available". The provider's own
@@ -28,20 +29,9 @@ String llmErrorText(AppLocalizations l10n, LlmError error, {String model = ''}) 
       LlmErrorKind.notAnalysed => l10n.llmErrNotAnalysed,
     };
 
-/// Kinds that Settings can fix: the error gets an "Open settings" action.
-bool llmErrorFixableInSettings(LlmErrorKind kind) => switch (kind) {
-      LlmErrorKind.noKey ||
-      LlmErrorKind.noModel ||
-      LlmErrorKind.invalidUrl ||
-      LlmErrorKind.unauthorized ||
-      LlmErrorKind.modelNotFound ||
-      LlmErrorKind.endpointNotFound ||
-      LlmErrorKind.quotaExceeded ||
-      LlmErrorKind.unsupportedParam ||
-      LlmErrorKind.cleartextBlocked ||
-      LlmErrorKind.tls => true,
-      _ => false,
-    };
+/// Kinds that Settings can fix: the error gets an "Open settings" action
+/// (`llmRecovery` is the single list).
+bool llmErrorFixableInSettings(LlmErrorKind kind) => llmRecovery(kind) == Recovery.openSettings;
 
 /// The error text for a base URL the policy refused (the settings field).
 String? baseUrlProblemText(AppLocalizations l10n, BaseUrlProblem problem) => switch (problem) {

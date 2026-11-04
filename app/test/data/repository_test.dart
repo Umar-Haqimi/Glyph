@@ -85,6 +85,47 @@ void contract(String name, Repos Function() create) {
       expect((await r.games.list()).map((g) => g.id), [c.id, b.id, a.id]);
     });
 
+    test('list carries everything a card shows (the movetext may be left out), get has the PGN', () async {
+      final saved = await r.games.save(newGame(sourceId: 'abc', source: GameSource.lichess, userSide: Side.white));
+      final listed = (await r.games.list()).single;
+      final full = (await r.games.get(saved.id))!;
+      expect(full.pgn, contains('1. e4 e5'));
+      expect(listed.id, full.id);
+      expect(listed.white, full.white);
+      expect(listed.black, full.black);
+      expect(listed.result, full.result);
+      expect(listed.date, full.date);
+      expect(listed.eco, full.eco);
+      expect(listed.openingName, full.openingName);
+      expect(listed.userSide, full.userSide);
+      expect(listed.plyCount, full.plyCount);
+      expect(listed.sourceId, full.sourceId);
+    });
+
+    test('deleteAll removes every game with its analysis, lines, labels and saved texts; clear empties cache and settings', () async {
+      final a = (await r.games.save(newGame(sourceId: 'a', source: GameSource.lichess))).id;
+      final b = (await r.games.save(newGame())).id;
+      await r.analyses.upsert(AnalysisRecord(
+        gameId: a, engine: 'e', depth: 12, multipv: 2, status: AnalysisStatus.completed, completedPlies: 3, updatedAt: 1));
+      await r.analyses.putPositionLines(a, 0, [PositionLineRecord(gameId: a, ply: 0, rank: 1, scoreCp: 10, depth: 12, pvUci: 'e2e4')]);
+      await r.analyses.putLabels(a, [MoveLabelRecord(gameId: a, ply: 1, label: MoveLabel.best)]);
+      await r.cache.put(CachedLlmText(key: 'k1', kind: PromptKind.move, content: 'x', model: 'm', createdAt: 1, gameId: a));
+      await r.cache.put(CachedLlmText(key: 'k2', kind: PromptKind.move, content: 'y', model: 'm', createdAt: 2, gameId: b));
+      await r.settings.set('x', '1');
+      expect(await r.games.deleteAll(), 2);
+      expect(await r.games.list(), isEmpty);
+      expect(await r.analyses.get(a), isNull);
+      expect(await r.analyses.positionLines(a), isEmpty);
+      expect(await r.analyses.labels(a), isEmpty);
+      expect(await r.cache.count(), 0);
+      expect(await r.settings.get('x'), '1', reason: 'deleteAll only touches games');
+      await r.cache.put(CachedLlmText(key: 'k3', kind: PromptKind.summary, content: 'z', model: 'm', createdAt: 3));
+      expect(await r.cache.clear(), 1);
+      expect(await r.cache.count(), 0);
+      await r.settings.clear();
+      expect(await r.settings.get('x'), isNull);
+    });
+
     test('dedupe on (source, source_id)', () async {
       final first = await r.games.save(newGame(sourceId: 'g1', source: GameSource.lichess));
       final again = await r.games.save(newGame(sourceId: 'g1', source: GameSource.lichess, white: 'changed'));
@@ -437,7 +478,7 @@ void main() {
       expect(await cache.get('e4'), isNotNull);
     });
 
-    test('a version 3 database upgrades to 4 and keeps its games', () async {
+    test('a version 3 database upgrades to the latest and keeps its games', () async {
       final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v3.db';
       addTearDown(() => File(path).parent.deleteSync(recursive: true));
       final v3 = Db.open(path, migrations: Db.migrations.take(3).toList());
@@ -445,7 +486,7 @@ void main() {
       v3.close();
       final db = Db.open(path);
       addTearDown(db.close);
-      expect(db.raw.userVersion, 4);
+      expect(db.raw.userVersion, Db.schemaVersion);
       expect((await SqliteGameRepository(db).get(id))!.sourceId, 'keep');
       expect(db.raw.select('SELECT COUNT(*) AS n FROM http_cache').first['n'], 0);
     });
@@ -455,8 +496,8 @@ void main() {
     test('creates the SPEC 5.4 schema (plus llm_cache.game_id from M6) at the latest user_version', () {
       final db = Db.inMemory();
       addTearDown(db.close);
-      expect(db.raw.userVersion, 4);
-      expect(Db.schemaVersion, 4);
+      expect(db.raw.userVersion, 5);
+      expect(Db.schemaVersion, 5);
       final tables = db.raw
           .select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
           .map((r) => r['name'])
@@ -477,6 +518,37 @@ void main() {
       expect(cols('llm_cache'), ['key', 'kind', 'content', 'model', 'created_at', 'game_id']);
       expect(cols('settings'), ['key', 'value']);
       expect(cols('http_cache'), ['key', 'etag', 'body', 'updated_at']);
+    });
+
+    test('M8 indexes exist, the library query and both cache trims use them', () {
+      final db = Db.inMemory();
+      addTearDown(db.close);
+      final indexes = db.raw
+          .select("SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'")
+          .map((r) => r['name'])
+          .toSet();
+      expect(indexes, containsAll(['games_imported', 'llm_cache_created', 'http_cache_updated', 'llm_cache_game']));
+      String plan(String sql) => db.raw.select('EXPLAIN QUERY PLAN $sql').map((r) => r['detail']).join(' | ');
+      final library = plan('SELECT g.id FROM games g LEFT JOIN analyses a ON a.game_id = g.id ORDER BY g.imported_at DESC, g.id DESC');
+      expect(library, contains('games_imported'));
+      expect(library, isNot(contains('TEMP B-TREE')), reason: 'no sort step: the index gives the order');
+      expect(plan('SELECT key FROM llm_cache ORDER BY created_at DESC'), contains('llm_cache_created'));
+      expect(plan('SELECT key FROM http_cache ORDER BY updated_at DESC'), contains('http_cache_updated'));
+      // Lines and labels are read by their primary keys.
+      expect(plan('SELECT * FROM position_lines WHERE game_id = 1 AND ply >= 3 ORDER BY ply, rank'), contains('sqlite_autoindex_position_lines_1'));
+      expect(plan('SELECT * FROM move_labels WHERE game_id = 1 ORDER BY ply'), contains('sqlite_autoindex_move_labels_1'));
+    });
+
+    test('a version 4 database upgrades to 5 and keeps its rows', () async {
+      final path = '${Directory.systemTemp.createTempSync('glyph_db_test').path}/v4.db';
+      addTearDown(() => File(path).parent.deleteSync(recursive: true));
+      final v4 = Db.open(path, migrations: Db.migrations.take(4).toList());
+      final id = (await SqliteGameRepository(v4).save(newGame(sourceId: 'keep'))).id;
+      v4.close();
+      final db = Db.open(path);
+      addTearDown(db.close);
+      expect(db.raw.userVersion, 5);
+      expect((await SqliteGameRepository(db).get(id))!.sourceId, 'keep');
     });
 
     test('foreign keys are on and CHECK constraints hold', () {

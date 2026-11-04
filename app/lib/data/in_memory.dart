@@ -81,6 +81,17 @@ class InMemoryGameRepository implements GameRepository {
   }
 
   @override
+  Future<int> deleteAll() async {
+    final n = store.games.length;
+    store.games.clear();
+    store.analyses.clear();
+    store.lines.clear();
+    store.labels.clear();
+    store.llmCache.removeWhere((_, v) => v.gameId != null);
+    return n;
+  }
+
+  @override
   Future<void> setUserSide(int id, Side? side) async {
     final g = store.games[id];
     if (g == null) return;
@@ -231,6 +242,13 @@ class InMemoryLlmCacheRepository implements LlmCacheRepository {
 
   @override
   Future<int> count() async => store.llmCache.length;
+
+  @override
+  Future<int> clear() async {
+    final n = store.llmCache.length;
+    store.llmCache.clear();
+    return n;
+  }
 }
 
 class InMemorySettingsRepository implements SettingsRepository {
@@ -246,4 +264,7 @@ class InMemorySettingsRepository implements SettingsRepository {
 
   @override
   Future<void> remove(String key) async => _values.remove(key);
+
+  @override
+  Future<void> clear() async => _values.clear();
 }

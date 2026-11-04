@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Vendors chessground into third_party/chessground with only free-licensed assets
-# (SPEC trap 15, docs/DECISIONS.md M0 section 2.5 and M5): the cburnett piece set and
-# an explicit allow-list of board images. Everything not listed is NOT copied, so a
+# (SPEC trap 15, docs/DECISIONS.md M0 section 2.5, M5 and M8, docs/ASSETS.md): an explicit
+# allow-list of piece sets and of board images. Everything not listed is NOT copied, so a
 # new upstream asset (a new piece set, a new board) can never slip in unreviewed.
 # Also writes third_party/chessground/NOTICE (GPL-3.0 section 5a: a modified copy
 # must carry a notice of the changes).
@@ -13,7 +13,9 @@ SRC="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/chessground-$VERSION"
 DST="$ROOT/third_party/chessground"
 
 # --- Allow-list: the only assets that are kept -------------------------------------
-KEEP_PIECE_SETS=(cburnett)
+# Every set here has a row in docs/ASSETS.md and in app/lib/features/about/asset_licences.dart;
+# app/test/features/asset_licences_test.dart fails when the three disagree.
+KEEP_PIECE_SETS=(cburnett merida mpchess rhosgfx)
 KEEP_BOARDS=(
   blue-marble.jpg blue2.jpg blue3.jpg canvas2.jpg green-plastic.webp grey.jpg
   leather.jpg maple.jpg maple2.jpg marble.jpg metal.jpg ncf-board.webp
@@ -36,6 +38,14 @@ for board in "${KEEP_BOARDS[@]}"; do
 done
 
 # Trimmed pubspec: same dependencies, only the assets that are kept.
+PIECE_ASSET_LINES=""
+KEEP_LIST=""
+for set in "${KEEP_PIECE_SETS[@]}"; do
+  PIECE_ASSET_LINES="${PIECE_ASSET_LINES}    - assets/piece_sets/$set/"$'\n'
+  KEEP_LIST="${KEEP_LIST:+$KEEP_LIST, }\`$set\`"
+done
+PIECE_ASSET_LINES="${PIECE_ASSET_LINES%$'\n'}"
+KEEP_CSV="$(IFS=,; echo "${KEEP_PIECE_SETS[*]}")"
 cat > "$DST/pubspec.yaml" <<YAML
 name: chessground
 description: Vendored copy of chessground $VERSION (lichess.org, GPL-3.0) with only free-licensed assets. See NOTICE and docs/DECISIONS.md.
@@ -55,7 +65,7 @@ dependencies:
 
 flutter:
   assets:
-    - assets/piece_sets/cburnett/
+$PIECE_ASSET_LINES
     - assets/boards/
 YAML
 
@@ -74,14 +84,14 @@ Changes against the upstream $VERSION release:
 1. pubspec.yaml was replaced: the same dependencies, but only the assets listed
    below are declared as Flutter assets.
 2. Assets REMOVED (not licensed for redistribution with Glyph, or not needed):
-   - every piece set except \`cburnett\` (assets/piece_sets/<name>/ for all other names);
+   - every piece set except $KEEP_LIST (assets/piece_sets/<name>/ for all other names);
    - every board image that is not in the allow-list of tool/vendor_chessground.sh,
      in particular the \`horsey\` board images (assets/boards/horsey*).
-   The assets that are kept: assets/piece_sets/cburnett/ and the board images of the
+   The assets that are kept: assets/piece_sets/{$KEEP_CSV}/ and the board images of the
    allow-list in tool/vendor_chessground.sh (assets/boards/).
 3. The Dart sources under lib/ are UNCHANGED. Consequently the enum \`PieceSet\` and
    the colour schemes of \`ChessboardColorScheme\` still name assets that are no longer
-   present (all piece sets but cburnett, \`ChessboardColorScheme.horsey\`). Using
+   present (all piece sets but $KEEP_LIST, \`ChessboardColorScheme.horsey\`). Using
    them would fail at run time with a missing asset. Glyph's app code therefore
    reaches these only through app/lib/features/board/board_assets.dart, and a test
    (app/test/hygiene_test.dart) fails if anything else references them.

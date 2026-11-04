@@ -9,13 +9,19 @@ abstract interface class GameRepository {
   /// back with `duplicate: true`.
   Future<SaveResult> save(NewGame game);
 
-  /// All games, newest import first, with their analysis summary.
+  /// All games, newest import first, with their analysis summary. The records
+  /// are for lists: their `pgn` may be empty (the SQLite implementation does
+  /// not read the movetext of every game); [get] has the full text.
   Future<List<GameRecord>> list();
 
   Future<GameRecord?> get(int id);
 
   /// Deletes the game and, by cascade, its analysis, lines and labels.
   Future<void> delete(int id);
+
+  /// Deletes every game and, by cascade, all analyses, lines and labels
+  /// (Settings > Delete all data). Returns how many games went.
+  Future<int> deleteAll();
 
   Future<void> setUserSide(int id, Side? side);
 
@@ -96,6 +102,10 @@ abstract interface class LlmCacheRepository {
 
   Future<int> count();
 
+  /// Removes every saved explanation and summary (Settings > Clear saved
+  /// explanations). Returns how many rows went.
+  Future<int> clear();
+
   static const int defaultMaxEntries = 500;
 }
 
@@ -106,6 +116,9 @@ abstract interface class SettingsRepository {
   Future<void> set(String key, String value);
 
   Future<void> remove(String key);
+
+  /// Removes every setting (Settings > Delete all data).
+  Future<void> clear();
 }
 
 /// Setting keys.
@@ -116,6 +129,13 @@ abstract final class SettingsKeys {
   static const engineDepthPreset = 'engine_depth_preset';
   static const engineThreads = 'engine_threads';
   static const engineHashMb = 'engine_hash_mb';
+
+  // General settings (SPEC F19, M8).
+  static const themeMode = 'theme_mode'; // system | light | dark
+  static const dynamicColor = 'dynamic_color'; // 1 | 0
+  static const boardScheme = 'board_scheme'; // a key of selectableBoardSchemes
+  static const pieceSet = 'piece_set'; // a key of selectablePieceSets
+  static const moveSounds = 'move_sounds'; // 1 | 0
 
   // Explanations (SPEC F13, F14, F12). Never the API key: that lives in the
   // secret store only.

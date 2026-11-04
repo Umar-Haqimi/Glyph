@@ -3,6 +3,7 @@ import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../widgets/section_header.dart';
 import 'account_settings.dart';
 
 /// Settings > Accounts (SPEC section 4 screen 6): the lichess and chess.com
@@ -19,10 +20,7 @@ class AccountsSettingsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(l10n.settingsAccounts, style: theme.textTheme.titleSmall),
-        ),
+        SectionHeader(l10n.settingsAccounts, padding: const EdgeInsets.fromLTRB(16, 16, 16, 4)),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Text(l10n.settingsAccountsHelp, style: theme.textTheme.bodySmall),

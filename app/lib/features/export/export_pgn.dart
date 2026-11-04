@@ -13,7 +13,14 @@ Future<void> exportGamePgn(BuildContext context, WidgetRef ref, int gameId) asyn
   final messenger = ScaffoldMessenger.of(context);
   void fail() => messenger
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(l10n.exportFailed)));
+    ..showSnackBar(SnackBar(
+      content: Text(l10n.exportFailed),
+      // Recovery: the same export again (the share sheet or the cache folder
+      // may only have been busy).
+      action: SnackBarAction(label: l10n.exportRetry, onPressed: () {
+        if (context.mounted) exportGamePgn(context, ref, gameId);
+      }),
+    ));
   try {
     final exported = await ref.read(pgnExportServiceProvider).build(gameId);
     if (exported == null) return fail();

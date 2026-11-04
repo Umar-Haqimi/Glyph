@@ -10,10 +10,20 @@ class SqliteGameRepository implements GameRepository {
 
   final Db _db;
 
-  static const _select = '''
-SELECT g.*, a.status AS a_status, a.completed_plies AS a_done,
-       a.white_accuracy AS a_white, a.black_accuracy AS a_black
-FROM games g LEFT JOIN analyses a ON a.game_id = g.id''';
+  static const _columns = '''
+g.id, g.source, g.source_id, g.white, g.black, g.white_elo, g.black_elo, g.result, g.date,
+       g.time_control, g.event, g.variant, g.start_fen, g.eco, g.opening_name, g.user_side,
+       g.ply_count, g.imported_at,
+       a.status AS a_status, a.completed_plies AS a_done,
+       a.white_accuracy AS a_white, a.black_accuracy AS a_black''';
+  static const _from = 'FROM games g LEFT JOIN analyses a ON a.game_id = g.id';
+
+  /// One game with its movetext.
+  static const _select = 'SELECT g.pgn, $_columns $_from';
+
+  /// The library list: no movetext. A library of hundreds of games would
+  /// otherwise read megabytes of PGN on every refresh, and no list item shows it.
+  static const _selectForList = "SELECT '' AS pgn, $_columns $_from";
 
   @override
   Future<SaveResult> save(NewGame g) async {
@@ -86,7 +96,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
 
   @override
   Future<List<GameRecord>> list() async => [
-        for (final r in _db.raw.select('$_select ORDER BY g.imported_at DESC, g.id DESC')) _fromRow(r),
+        for (final r in _db.raw.select('$_selectForList ORDER BY g.imported_at DESC, g.id DESC')) _fromRow(r),
       ];
 
   @override
@@ -102,6 +112,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
       _db.raw.execute('DELETE FROM games WHERE id = ?', [id]);
     });
   }
+
+  @override
+  Future<int> deleteAll() async => _db.transaction(() {
+        _db.raw.execute('DELETE FROM llm_cache WHERE game_id IS NOT NULL');
+        _db.raw.execute('DELETE FROM games');
+        return _db.raw.updatedRows;
+      });
 
   @override
   Future<void> setUserSide(int id, Side? side) async =>
@@ -359,6 +376,12 @@ class SqliteLlmCacheRepository implements LlmCacheRepository {
 
   @override
   Future<int> count() async => _db.raw.select('SELECT COUNT(*) AS n FROM llm_cache').first['n'] as int;
+
+  @override
+  Future<int> clear() async {
+    _db.raw.execute('DELETE FROM llm_cache');
+    return _db.raw.updatedRows;
+  }
 }
 
 class SqliteSettingsRepository implements SettingsRepository {
@@ -381,6 +404,9 @@ class SqliteSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> remove(String key) async => _db.raw.execute('DELETE FROM settings WHERE key = ?', [key]);
+
+  @override
+  Future<void> clear() async => _db.raw.execute('DELETE FROM settings');
 }
 
 /// ETags and the data they stand for (chess.com), see [OnlineCache]. The table
@@ -414,4 +440,7 @@ class SqliteOnlineCache implements OnlineCache {
       );
     });
   }
+
+  @override
+  Future<void> clear() async => _db.raw.execute('DELETE FROM http_cache');
 }

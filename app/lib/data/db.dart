@@ -22,7 +22,7 @@ class Db {
 
   /// Migration `i` upgrades `user_version` i to i + 1. Never edit a shipped
   /// migration; append a new one.
-  static final List<void Function(Database db)> migrations = [_v1, _v2, _v3, _v4];
+  static final List<void Function(Database db)> migrations = [_v1, _v2, _v3, _v4, _v5];
 
   void _init() {
     raw.execute('PRAGMA foreign_keys = ON');
@@ -208,4 +208,21 @@ CREATE TABLE http_cache (
   body TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 )''');
+}
+
+/// M8: indexes for the queries the app runs on every start or every list refresh.
+///
+/// * `games_imported`: the library lists every game newest import first
+///   (`ORDER BY imported_at DESC, id DESC`); without it SQLite sorts the whole
+///   table each time.
+/// * `llm_cache_created`: `put` trims the cache to the newest rows
+///   (`ORDER BY created_at DESC`).
+/// * `http_cache_updated`: the same trim for `http_cache`.
+///
+/// `position_lines` and `move_labels` are read by `(game_id, ply...)`, which
+/// their primary keys already cover; `analyses` is keyed by `game_id`.
+void _v5(Database db) {
+  db.execute('CREATE INDEX games_imported ON games (imported_at DESC, id DESC)');
+  db.execute('CREATE INDEX llm_cache_created ON llm_cache (created_at DESC)');
+  db.execute('CREATE INDEX http_cache_updated ON http_cache (updated_at DESC)');
 }

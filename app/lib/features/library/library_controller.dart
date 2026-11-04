@@ -66,6 +66,20 @@ class LibraryController extends AsyncNotifier<List<GameRecord>> {
     state = AsyncData(_visible());
   }
 
+  /// Deletes every game (Settings > Delete all data): stops all analyses, aborts
+  /// all summary requests, then removes the rows. Returns how many games went.
+  Future<int> deleteAllGames() async {
+    await future;
+    _pendingDelete.clear();
+    ref.invalidate(summaryProvider);
+    await _engine.cancelAll();
+    final n = await ref.read(gameRepositoryProvider).deleteAll();
+    ref.invalidate(summaryProvider);
+    _all = const [];
+    state = const AsyncData([]);
+    return n;
+  }
+
   Future<void> _deleteForGood(int id) async {
     // Stop its analysis (running or queued) before the rows go away; the
     // pipeline also copes if a write still races the delete.

@@ -1,5 +1,5 @@
 import 'package:dartchess/dartchess.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemSound, SystemSoundType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glyph_core/glyph_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,9 +8,11 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../../widgets/choice_option.dart';
 import '../../routes.dart';
 import '../export/export_pgn.dart';
 import '../library/library_controller.dart';
+import '../settings/appearance_settings.dart';
 import '../settings/engine_settings.dart';
 import '../report/report_screen.dart';
 import 'analysis_board.dart';
@@ -27,6 +29,11 @@ import 'move_badge.dart';
 import 'move_list.dart';
 import 'player_strip.dart';
 import 'spoken_move.dart';
+
+/// What plays when a single move is stepped and Settings > Move sounds is on.
+/// The system click: no sound file ships with Glyph (nothing to licence), and
+/// Android mutes it with the user's "touch sounds" setting. Tests override it.
+final moveSoundProvider = Provider<void Function()>((ref) => () => SystemSound.play(SystemSoundType.click));
 
 /// Analysis board (SPEC section 4, screen 3): the review experience without
 /// the LLM. View-only in v1; all navigation goes through a [PositionCursor],
@@ -78,10 +85,13 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     if (cursor == null) return;
     final target = ply.clamp(0, cursor.length);
     if (target == cursor.ply) return;
+    final single = (target - cursor.ply).abs() == 1;
     setState(() {
-      _animate = (target - cursor.ply).abs() == 1;
+      _animate = single;
       cursor.goTo(target);
     });
+    // Settings > Move sounds: one click per single step, none for a jump.
+    if (single && ref.read(appearanceProvider).moveSounds) ref.read(moveSoundProvider)();
   }
 
   Side _orientation(BoardData data) {
@@ -98,13 +108,13 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
         title: Text(l10n.boardYourSideTitle),
         children: [
           for (final (side, text) in [(Side.white, l10n.sideWhite), (Side.black, l10n.sideBlack)])
-            _ChoiceOption(
+            ChoiceOption(
               optionKey: Key('your-side-${side.name}'),
               onPressed: () => Navigator.of(context).pop(side),
               text: text,
               selected: data.userSide == side,
             ),
-          _ChoiceOption(
+          ChoiceOption(
             optionKey: const Key('your-side-none'),
             onPressed: () => Navigator.of(context).pop(none),
             text: l10n.boardYourSideNone,
@@ -137,7 +147,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             child: Text(l10n.boardReanalyseNote, style: Theme.of(context).textTheme.bodySmall),
           ),
           for (final preset in DepthPreset.values)
-            _ChoiceOption(
+            ChoiceOption(
               optionKey: Key('reanalyse-${preset.name}'),
               onPressed: () => Navigator.of(context).pop(preset),
               text: l10n.boardReanalyseOption(_presetName(l10n, preset), preset.depth),
@@ -238,7 +248,19 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     } else if (dataAsync == null || dataAsync.isLoading) {
       content = const Center(child: CircularProgressIndicator());
     } else {
-      content = _Message(text: dataAsync.hasError ? l10n.boardLoadFailed : l10n.boardUnavailable);
+      content = dataAsync.hasError
+          ? _Message(
+              text: l10n.boardLoadFailed,
+              actionKey: const Key('board-retry'),
+              actionLabel: l10n.commonRetry,
+              onAction: () => ref.invalidate(boardDataProvider(id)),
+            )
+          : _Message(
+              text: l10n.boardUnavailable,
+              actionKey: const Key('board-back'),
+              actionLabel: l10n.commonBackToLibrary,
+              onAction: () => Navigator.of(context).maybePop(),
+            );
     }
 
     return Scaffold(
@@ -314,6 +336,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   Widget _buildBoard(BuildContext context, AppLocalizations l10n, BoardData data) {
     final cursor = _cursor!;
     final ply = cursor.ply;
+    final appearance = ref.watch(appearanceProvider);
     final orientation = _orientation(data);
     final position = cursor.position;
     final eval = evalDisplayAt(data, l10n, ply);
@@ -393,6 +416,8 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                         arrow: arrow,
                         animate: _animate,
                         semanticsLabel: boardLabel,
+                        boardScheme: appearance.boardScheme,
+                        pieceSet: appearance.pieceSet,
                       ),
                     ),
                     strip(orientation),
@@ -488,44 +513,31 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.text});
+  const _Message({required this.text, this.actionKey, this.actionLabel, this.onAction});
 
   final String text;
+
+  /// An optional recovery action under the text (Try again, Back).
+  final Key? actionKey;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(text, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
-        ),
-      );
-}
-
-/// One choice of a dialog list: a button that is also a radio option for a
-/// screen reader (checked + mutually exclusive group), with a visible tick.
-class _ChoiceOption extends StatelessWidget {
-  const _ChoiceOption({required this.optionKey, required this.onPressed, required this.text, required this.selected});
-
-  final Key optionKey;
-  final VoidCallback onPressed;
-  final String text;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        inMutuallyExclusiveGroup: true,
-        checked: selected,
-        child: SimpleDialogOption(
-          key: optionKey,
-          onPressed: onPressed,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Row(
-              children: [
-                Expanded(child: Text(text)),
-                if (selected) const ExcludeSemantics(child: Icon(Icons.check)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                liveRegion: true,
+                child: Text(text, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+              ),
+              if (actionLabel != null) ...[
+                const SizedBox(height: 16),
+                FilledButton(key: actionKey, onPressed: onAction, child: Text(actionLabel!)),
               ],
-            ),
+            ],
           ),
         ),
       );

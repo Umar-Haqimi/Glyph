@@ -16,6 +16,8 @@ import 'multistockfish_driver.dart';
 import 'repository_analysis_store.dart';
 import 'review_service.dart';
 
+export '../features/settings/engine_settings.dart' show engineSettingsProvider;
+
 /// How engines are created. Tests override it with `FakeEngineDriver`
 /// (`package:glyph_core/testing.dart`).
 final engineDriverFactoryProvider = Provider<EngineDriverFactory>((ref) => MultistockfishDriver.create);
@@ -107,11 +109,6 @@ final reviewServiceProvider = Provider<ReviewService>((ref) {
     book: () => ref.read(openingBookProvider.future),
   );
 });
-
-/// The engine settings (depth preset, threads, hash).
-final engineSettingsProvider = FutureProvider<EngineSettings>(
-  (ref) => EngineSettings.load(ref.watch(settingsRepositoryProvider)),
-);
 
 /// Job state for the UI. Exposes the one running job (or the last finished
 /// one) of the [EngineService]; filter on `state.gameId` to show a game.

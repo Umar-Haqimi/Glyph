@@ -479,4 +479,7 @@ class _BrokenCache implements OnlineCache {
 
   @override
   Future<void> put(String key, CachedResponse response) async => throw StateError('disk full');
+
+  @override
+  Future<void> clear() async => throw StateError('disk full');
 }

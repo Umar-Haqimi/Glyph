@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/models.dart';
 import '../../engine/engine_providers.dart';
 import '../../l10n/app_localizations.dart';
+import '../errors/recovery.dart';
 
 /// Progress of the analysis of one game with Cancel / Resume / Retry
 /// (SPEC section 4, board screen). Shows the live job when it belongs to
@@ -60,15 +61,16 @@ class AnalysisProgress extends ConsumerWidget {
         return row(l10n.analysisCancelled(completed, n), actionLabel: l10n.analysisResume, onAction: start);
       case AnalysisPaused(:final completed, total: final n):
         return row(l10n.analysisPaused(completed, n), actionLabel: l10n.analysisResume, onAction: start);
-      case AnalysisFailed(kind: AnalysisFailureKind.invalidGame):
-        // Retrying cannot help: the game itself is unreadable.
-        return row(l10n.analysisFailedInvalid);
       case AnalysisFailed(:final kind):
-        return row(
-          kind == AnalysisFailureKind.engineUnavailable ? l10n.analysisFailedUnavailable : l10n.analysisFailedCrashed,
-          actionLabel: l10n.analysisRetry,
-          onAction: start,
-        );
+        final text = switch (kind) {
+          AnalysisFailureKind.engineUnavailable => l10n.analysisFailedUnavailable,
+          AnalysisFailureKind.engineCrashed => l10n.analysisFailedCrashed,
+          AnalysisFailureKind.invalidGame => l10n.analysisFailedInvalid,
+        };
+        // Retrying cannot help when the game itself is unreadable.
+        return analysisRecovery(kind) == Recovery.retry
+            ? row(text, actionLabel: l10n.analysisRetry, onAction: start)
+            : row(text);
       case AnalysisIdle():
       case null:
         break;

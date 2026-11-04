@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
 import '../../l10n/app_localizations.dart';
+import '../../platform/app_log.dart';
 import '../../routes.dart';
 import 'import_service.dart';
 import 'parse_result_view.dart';
@@ -27,7 +28,16 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     final selected = _selected;
     if (selected == null || _saving) return;
     setState(() => _saving = true);
-    final saved = await ref.read(importServiceProvider).save(widget.result.games[selected], widget.source);
+    final SaveResult saved;
+    try {
+      saved = await ref.read(importServiceProvider).save(widget.result.games[selected], widget.source);
+    } on Object catch (e) {
+      AppLog.warning('Saving an imported game failed', e);
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showImportSaveFailed(context, _save);
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(Routes.board, arguments: saved.id);
   }

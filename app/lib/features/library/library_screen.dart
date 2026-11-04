@@ -34,7 +34,23 @@ class LibraryScreen extends ConsumerWidget {
       ),
       body: games.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(child: Text(l10n.libraryLoadFailed)),
+        error: (_, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(liveRegion: true, child: Text(l10n.libraryLoadFailed, textAlign: TextAlign.center)),
+                const SizedBox(height: 16),
+                FilledButton(
+                  key: const Key('library-retry'),
+                  onPressed: () => ref.invalidate(libraryProvider),
+                  child: Text(l10n.libraryRetry),
+                ),
+              ],
+            ),
+          ),
+        ),
         data: (list) => list.isEmpty ? const _EmptyState() : _GameList(games: list),
       ),
       floatingActionButton: FloatingActionButton.extended(

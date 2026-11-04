@@ -14,6 +14,9 @@ abstract interface class OnlineCache {
   Future<CachedResponse?> get(String key);
 
   Future<void> put(String key, CachedResponse response);
+
+  /// Forgets everything (Settings > Clear online cache).
+  Future<void> clear();
 }
 
 class InMemoryOnlineCache implements OnlineCache {
@@ -24,4 +27,7 @@ class InMemoryOnlineCache implements OnlineCache {
 
   @override
   Future<void> put(String key, CachedResponse response) async => entries[key] = response;
+
+  @override
+  Future<void> clear() async => entries.clear();
 }

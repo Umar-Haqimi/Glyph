@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:glyph_core/glyph_core.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../data/repositories.dart';
+import '../../l10n/app_localizations.dart';
 import '../library/library_controller.dart';
 
 /// Saves a parsed [Game] to the library: names the opening from the book and
@@ -47,3 +49,14 @@ class ImportService {
 }
 
 final importServiceProvider = Provider<ImportService>(ImportService.new);
+
+/// "Couldn't save the game" with Try again (the database refused the write).
+void showImportSaveFailed(BuildContext context, VoidCallback retry) {
+  final l10n = AppLocalizations.of(context);
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(
+      content: Text(l10n.importSaveFailed),
+      action: SnackBarAction(label: l10n.commonRetry, onPressed: retry),
+    ));
+}

@@ -54,20 +54,23 @@ void main() {
       expect(notice, contains('GNU General'));
       expect(notice, contains('pubspec.yaml'));
       expect(notice, contains('horsey'));
-      expect(notice, contains('cburnett'));
+      for (final set in ['cburnett', 'merida', 'mpchess', 'rhosgfx']) {
+        expect(notice, contains(set));
+      }
       expect(notice, contains('UNCHANGED'));
       expect(File('../third_party/chessground/LICENSE').existsSync(), isTrue);
     });
 
     test('the vendoring script copies from an allow-list, and the tree is exactly that list', () {
       final script = File('../tool/vendor_chessground.sh').readAsStringSync();
-      expect(script, contains('KEEP_PIECE_SETS=(cburnett)'));
+      final listedSets = RegExp(r'KEEP_PIECE_SETS=\(([^)]*)\)').firstMatch(script)!.group(1)!.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toSet();
+      expect(listedSets, {'cburnett', 'merida', 'mpchess', 'rhosgfx'});
       expect(script, isNot(contains('rm -f "\$DST"/assets/boards/horsey')));
       final listed = RegExp(r'KEEP_BOARDS=\(([^)]*)\)').firstMatch(script)!.group(1)!.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toSet();
       final boards = Directory('../third_party/chessground/assets/boards').listSync().map((e) => e.path.split('/').last).toSet();
       expect(boards, listed);
       final sets = Directory('../third_party/chessground/assets/piece_sets').listSync().map((e) => e.path.split('/').last).toSet();
-      expect(sets, {'cburnett'});
+      expect(sets, listedSets);
       expect(boards.any((b) => b.startsWith('horsey')), isFalse);
     });
   });

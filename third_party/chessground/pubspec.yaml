@@ -17,4 +17,7 @@ dependencies:
 flutter:
   assets:
     - assets/piece_sets/cburnett/
+    - assets/piece_sets/merida/
+    - assets/piece_sets/mpchess/
+    - assets/piece_sets/rhosgfx/
     - assets/boards/

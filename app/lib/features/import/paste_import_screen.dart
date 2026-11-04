@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
 import '../../l10n/app_localizations.dart';
+import '../../platform/app_log.dart';
 import '../../routes.dart';
 import 'import_service.dart';
 import 'parse_result_view.dart';
@@ -77,7 +78,16 @@ class _PasteImportScreenState extends ConsumerState<PasteImportScreen> {
     final selected = _selected;
     if (result == null || selected == null || _saving) return;
     setState(() => _saving = true);
-    final saved = await ref.read(importServiceProvider).save(result.games[selected], GameSource.paste);
+    final SaveResult saved;
+    try {
+      saved = await ref.read(importServiceProvider).save(result.games[selected], GameSource.paste);
+    } on Object catch (e) {
+      AppLog.warning('Saving an imported game failed', e);
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showImportSaveFailed(context, _save);
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(Routes.board, arguments: saved.id);
   }
